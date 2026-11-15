@@ -1,1 +1,0 @@
-"""Cross-cutting infrastructure: settings, database, security, permissions, errors."""
