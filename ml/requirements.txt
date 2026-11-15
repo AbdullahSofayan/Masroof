@@ -1,0 +1,6 @@
+# ML service (what the backend runs)
+fastapi[standard]
+pandas
+numpy
+scikit-learn
+joblib
