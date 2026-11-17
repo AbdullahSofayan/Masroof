@@ -24,7 +24,7 @@ export default function SummaryCards({ expenses = [], title = 'Total spend' }) {
   const approved = visibleExpenses.filter((expense) => expense.status === STATUS.APPROVED);
   const pending = visibleExpenses.filter((expense) => [STATUS.PENDING_MANAGER, STATUS.PENDING_FINANCE].includes(expense.status));
   const changes = visibleExpenses.filter((expense) => expense.status === STATUS.NEEDS_CHANGES);
-  const total = sum(visibleExpenses);
+  const total = sum(visibleExpenses.filter((expense) => expense.status !== STATUS.REJECTED));
   const approvedTotal = sum(approved);
   const pendingTotal = sum(pending);
   const segments = [
@@ -62,7 +62,7 @@ export default function SummaryCards({ expenses = [], title = 'Total spend' }) {
             <span className="tabular-nums text-white">{total > 0 ? Math.round(segment.amount / total * 100) : 0}%</span>
           </span>)}
         </div>
-        <p className="sr-only">Remaining includes requests needing changes and rejected requests.</p>
+        <p className="sr-only">Remaining includes requests needing changes. Rejected requests are excluded from spend.</p>
       </div>
       <dl className="hero-metrics mt-auto grid grid-cols-2 gap-x-4 gap-y-5 border-t border-white/15 pt-5 xl:grid-cols-4">
         {metrics.map((metric) => <div key={metric.label} className="min-w-0">

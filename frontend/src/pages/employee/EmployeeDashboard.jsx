@@ -27,6 +27,7 @@ export default function EmployeeDashboard() {
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} retry={reload} />;
   const changes = data.filter((entry) => entry.status === STATUS.NEEDS_CHANGES);
+  const spendExpenses = data.filter((entry) => entry.status !== STATUS.REJECTED);
   const categoryExpenses = category ? data.filter((entry) => expenseCategoryKey(entry) === category.key) : data;
   const filtered = status ? categoryExpenses.filter((entry) => entry.status === status) : categoryExpenses;
   const activePage = Math.min(page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
@@ -41,7 +42,7 @@ export default function EmployeeDashboard() {
       action={<Link to="/employee/expenses/new" className="btn-primary"><Plus size={16} />New expense</Link>} />
     <div className="bento-grid">
       <AnimatedContent className="min-w-0 lg:col-span-8" distance={12} duration={0.4}><SummaryCards expenses={data} /></AnimatedContent>
-      <AnimatedContent className="min-w-0 lg:col-span-4" delay={0.04} distance={12} duration={0.4}><CategoryExposureCard expenses={data} selectedCategory={category?.key} onCategorySelect={selectCategory} onViewExpenses={() => navigate('/employee/expenses')} /></AnimatedContent>
+      <AnimatedContent className="min-w-0 lg:col-span-4" delay={0.04} distance={12} duration={0.4}><CategoryExposureCard expenses={spendExpenses} selectedCategory={category?.key} onCategorySelect={selectCategory} onViewExpenses={() => navigate('/employee/expenses')} /></AnimatedContent>
       <AnimatedContent className="min-w-0 lg:col-span-7" delay={0.08} distance={12} duration={0.4}><section className="card bento-panel flex h-full flex-col justify-between"><SpendSparkline expenses={data} />
         {changes.length > 0 && <Link to={`/employee/expenses?status=${STATUS.NEEDS_CHANGES}`} className="mt-5 flex items-center gap-3 rounded-2xl border border-zinc-100 bg-[#F6F6F4] p-4">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold tabular-nums text-zinc-700">{changes.length}</span>

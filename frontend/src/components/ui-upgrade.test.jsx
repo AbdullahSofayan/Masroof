@@ -154,7 +154,7 @@ describe('UI behavior with unavailable browser animation APIs', () => {
     const allocations = () => [...host.querySelectorAll('.hero-allocation > span')].map((node) => parseFloat(node.style.width));
     expect(host.querySelector('[role="group"][aria-label="Spend timeframe"]')).not.toBeNull();
     expect(button('All time').getAttribute('aria-pressed')).toBe('true');
-    expect(headline()).toBe('370.00');
+    expect(headline()).toBe('310.00');
     expect(metrics()).toEqual(['190.00', '90.00', '30.00', '43%']);
     await act(async () => button('Daily').click());
     expect(button('Daily').getAttribute('aria-pressed')).toBe('true');
@@ -172,7 +172,7 @@ describe('UI behavior with unavailable browser animation APIs', () => {
     expect(metrics()).toEqual(['100.00', '90.00', '30.00', '25%']);
     expect(allocations()[2]).toBeCloseTo(30 / 220 * 100);
     await act(async () => button('All time').click());
-    expect(headline()).toBe('370.00');
+    expect(headline()).toBe('310.00');
     expect(host.querySelector('.hero-request-count').textContent).toContain('7 requests');
     expect(metrics()).toEqual(['190.00', '90.00', '30.00', '43%']);
   });
@@ -186,6 +186,53 @@ describe('UI behavior with unavailable browser animation APIs', () => {
     expect(host.querySelector('.hero-request-count').textContent).toContain('0 requests');
     expect([...host.querySelectorAll('.hero-metrics .sr-only')].map((node) => node.textContent)).toEqual(['0.00', '0.00', '0.00', '0%']);
     expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
+  });
+
+  it('deducts newly rejected claims from spend in every timeframe while retaining request metrics', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T09:00:00Z'));
+    const expense = { date: '2026-11-17', amount: '250', status: STATUS.PENDING_MANAGER };
+    await render(<SummaryCards expenses={[expense]} />);
+    expect(host.querySelector('.hero-number .sr-only').textContent).toBe('250.00');
+    await render(<SummaryCards expenses={[{ ...expense, status: STATUS.REJECTED }]} />);
+    for (const timeframe of ['All time', 'Daily', 'Weekly']) {
+      await act(async () => button(timeframe).click());
+      expect(host.querySelector('.hero-number .sr-only').textContent).toBe('0.00');
+      expect(host.querySelector('.hero-request-count').textContent).toContain('1 request');
+      expect([...host.querySelectorAll('.hero-allocation > span')].map((node) => node.style.width)).toEqual(['0%', '0%', '0%']);
+      expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
+    }
+  });
+
+  it.each(['employee', 'manager'])('excludes rejected spend from the %s dashboard while retaining rejected history and filters', async (role) => {
+    if (role === 'manager') state.user = demoUsers.find((user) => user.username === 'khalid');
+    const base = createDemoData()[0];
+    const expenses = [
+      { ...base, id: 901, amount: '900', status: STATUS.REJECTED, category: { id: 1, name: 'Travel' } },
+      { ...base, id: 902, amount: '100', status: STATUS.APPROVED, category: { id: 1, name: 'Travel' } },
+      { ...base, id: 903, amount: '300', status: STATUS.PENDING_MANAGER, category: { id: 2, name: 'Meals' } },
+      { ...base, id: 904, amount: '200', status: STATUS.REJECTED, category: { id: 3, name: 'Rejected only' } },
+    ];
+    vi.spyOn(api, 'allExpenses').mockResolvedValue(expenses);
+    await render(router(role === 'employee' ? <EmployeeDashboard /> : <ManagerDashboard />));
+    expect(host.querySelector('.hero-number .sr-only').textContent).toBe('400.00');
+    const categories = host.querySelector('[aria-label="Spend by Category"]');
+    expect(categories.querySelector('[aria-label="Filter by Travel"]').textContent).toContain('25%');
+    expect(categories.querySelector('[aria-label="Filter by Meals"]').textContent).toContain('75%');
+    expect(categories.querySelector('[aria-label="Filter by Rejected only"]')).toBeNull();
+    if (role === 'employee') {
+      const activity = host.querySelector('[aria-label="Recent activity"]');
+      expect(activity.querySelector('a[href="/employee/expenses?expense=901"]')).not.toBeNull();
+      expect(activity.textContent).toContain('Rejected');
+    }
+    expect(button('Rejected').textContent).toContain('2');
+    await act(async () => button('Rejected').click());
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(host.querySelector('tbody').textContent).toContain('EXP-901');
+    expect(host.querySelector('tbody').textContent).toContain('EXP-904');
+    await act(async () => categories.querySelector('[aria-label="Filter by Travel"]').click());
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(host.querySelector('tbody').textContent).toContain('EXP-901');
   });
 
   it('distinguishes rejection and returned timeline entries while preserving intact Arabic notes', async () => {
@@ -364,7 +411,7 @@ describe('UI behavior with unavailable browser animation APIs', () => {
     const expenses = createDemoData().filter((expense) => expense.requester.id === state.user.id);
     vi.spyOn(api, 'allExpenses').mockResolvedValue(expenses);
     await render(router(<EmployeeDashboard />));
-    const total = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+    const total = expenses.filter((expense) => expense.status !== STATUS.REJECTED).reduce((sum, expense) => sum + Number(expense.amount), 0);
     expect(host.textContent).toContain(total.toLocaleString('en-US', { minimumFractionDigits: 2 }));
     expect(host.querySelectorAll('[data-spotlight-card]')).toHaveLength(1);
     expect(host.querySelectorAll('.hero-metrics > div')).toHaveLength(4);

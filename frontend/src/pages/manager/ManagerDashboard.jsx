@@ -27,6 +27,7 @@ export default function ManagerDashboard() {
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} retry={reload} />;
   const reviewable = data.filter((entry) => entry.requester?.id !== user.id);
+  const spendExpenses = data.filter((entry) => entry.status !== STATUS.REJECTED);
   const queue = reviewable.filter((entry) => entry.status === STATUS.PENDING_MANAGER);
   const categoryExpenses = category ? reviewable.filter((entry) => expenseCategoryKey(entry) === category.key) : reviewable;
   const filtered = status ? categoryExpenses.filter((entry) => entry.status === status) : categoryExpenses;
@@ -52,7 +53,7 @@ export default function ManagerDashboard() {
       action={<button className="btn-secondary" onClick={reload}><ArrowDownUp size={15} />Refresh</button>} />
     <div className="bento-grid">
       <AnimatedContent className="min-w-0 lg:col-span-8" distance={12} duration={0.4}><SummaryCards expenses={data} title="Department spend" /></AnimatedContent>
-      <AnimatedContent className="min-w-0 lg:col-span-4" delay={0.04} distance={12} duration={0.4}><CategoryExposureCard expenses={data} reviewExpenses={reviewable} selectedCategory={category?.key} onCategorySelect={selectCategory} onViewExpenses={viewExpenses} /></AnimatedContent>
+      <AnimatedContent className="min-w-0 lg:col-span-4" delay={0.04} distance={12} duration={0.4}><CategoryExposureCard expenses={spendExpenses} reviewExpenses={reviewable} selectedCategory={category?.key} onCategorySelect={selectCategory} onViewExpenses={viewExpenses} /></AnimatedContent>
       <AnimatedContent className="min-w-0 lg:col-span-7" delay={0.08} distance={12} duration={0.4}>
         <section className="card bento-panel h-full"><SpendSparkline expenses={data} />
           <div className="dashboard-budget mt-5 border-t border-zinc-100 pt-4"><BudgetProgressBar spent={approved} budget={USE_MOCK ? DEMO_DEPARTMENT_ALLOCATION : null} label={USE_MOCK ? 'Demo department allocation' : 'Department budget'} /><p className="mt-2 text-[10px] text-zinc-400">Final approvals only · All time</p></div>
