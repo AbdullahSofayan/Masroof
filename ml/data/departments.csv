@@ -1,0 +1,21 @@
+department_id,name,manager_id,agency_number
+1,Operations,101,1000
+2,Business Development,102,76000
+3,Research & Development,103,77000
+4,Facilities Management,104,13100
+5,Fleet & Logistics,105,34500
+6,Projects,106,56600
+7,Engineering,107,98000
+8,Field Services,108,80500
+9,Hospitality & Events,109,66500
+10,Security,110,58500
+11,Administration,111,9000
+12,Maintenance,112,2500
+13,Health & Safety,113,65000
+14,Human Resources,114,45200
+15,Environment & Sustainability,115,32000
+16,Training & Development,116,53000
+17,Sales,117,75000
+18,Information Technology,118,4000
+19,Marketing,119,80000
+20,Public Relations,120,42000
