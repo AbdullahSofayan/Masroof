@@ -1,0 +1,3 @@
+import { Building2 } from 'lucide-react';
+import { PageHeading } from '../../components/UI';
+export default function FinancePlaceholder() { return <><PageHeading eyebrow="Finance workspace" title="Finance is coming together." description="This workspace is reserved for the Finance frontend team." /><section className="card mx-auto mt-12 max-w-xl px-6 py-16 text-center"><div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><Building2 size={28} /></div><h2 className="text-lg font-semibold">A place for the next step</h2><p className="mt-3 text-sm leading-7 text-slate-500">The Finance workspace will be available here soon.</p></section></>; }
