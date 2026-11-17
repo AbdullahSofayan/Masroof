@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { gsap } from 'gsap';
 import Navbar from './Navbar';
 import ApprovalTimeline from './ApprovalTimeline';
+import SummaryCards from './SummaryCards';
 import AnimatedContent from './reactbits/AnimatedContent';
 import CountUp from './reactbits/CountUp';
 import SpotlightCard from './reactbits/SpotlightCard';
@@ -31,6 +32,9 @@ let root;
 const browserRequestFrame = window.requestAnimationFrame.bind(window);
 const browserCancelFrame = window.cancelAnimationFrame.bind(window);
 beforeEach(() => {
+  // Stop GSAP's shared ticker before tests remove frame APIs or change the clock.
+  vi.stubGlobal('cancelAnimationFrame', browserCancelFrame);
+  gsap.ticker.sleep();
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('requestAnimationFrame', undefined);
   vi.stubGlobal('cancelAnimationFrame', undefined);
@@ -46,20 +50,144 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   // Stop the real-animation test's shared ticker before restoring unavailable frame APIs.
-  if (typeof cancelAnimationFrame === 'function') gsap.ticker.sleep();
+  vi.stubGlobal('cancelAnimationFrame', browserCancelFrame);
+  gsap.ticker.sleep();
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 async function render(element) { await act(async () => { root.render(element); }); }
 function router(element, path = '/') { return <MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>; }
-const button = (label) => [...host.querySelectorAll('button')].find((node) => node.textContent.includes(label));
+const button = (label) => [...host.querySelectorAll('button')].find((node) => node.getAttribute('aria-label') === label || node.textContent.trim() === label)
+  || [...host.querySelectorAll('button')].find((node) => node.textContent.includes(label));
 async function input(node, value) {
   const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), 'value').set;
   await act(async () => { setter.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); });
 }
 
 describe('UI behavior with unavailable browser animation APIs', () => {
+  it('opens the employee expense history from the accessible category header button', async () => {
+    vi.spyOn(api, 'allExpenses').mockResolvedValue(createDemoData().filter((expense) => expense.requester.id === state.user.id));
+    await render(router(<Routes><Route path="/employee/dashboard" element={<EmployeeDashboard />} /><Route path="/employee/expenses" element={<p>Employee expense destination</p>} /></Routes>, '/employee/dashboard'));
+    const view = button('View expenses by category');
+    expect(view.type).toBe('button');
+    expect(view.title).toBe('View expenses by category');
+    await act(async () => view.click());
+    expect(host.textContent).toBe('Employee expense destination');
+  });
+
+  it('filters employee rows by category with click and keyboard toggles, scrolls, and clears the category pill', async () => {
+    const expenses = createDemoData().filter((expense) => expense.requester.id === state.user.id);
+    vi.spyOn(api, 'allExpenses').mockResolvedValue(expenses);
+    await render(router(<EmployeeDashboard />));
+    const ledger = host.querySelector('#employee-expenses');
+    const scroll = vi.fn(); ledger.scrollIntoView = scroll;
+    await act(async () => host.querySelector('[aria-label="Next page"]').click());
+    const category = host.querySelector('[aria-label="Filter by Travel & transport"]');
+    expect(category.getAttribute('role')).toBe('button');
+    expect(category.tabIndex).toBe(0);
+    await act(async () => category.click());
+    expect(category.getAttribute('aria-pressed')).toBe('true');
+    expect(scroll).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' });
+    const expected = expenses.filter((expense) => expense.category.name === 'Travel & transport');
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(expected.length);
+    expect([...host.querySelectorAll('tbody tr')].every((row) => row.textContent.includes('Travel & transport'))).toBe(true);
+    expect(ledger.textContent).toContain(`1–${expected.length} of ${expected.length} expenses`);
+    expect(button('Clear category filter').textContent).toContain('Category: Travel & transport');
+    await act(async () => category.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    expect(category.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelector('[aria-label="Clear category filter"]')).toBeNull();
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(PAGE_SIZE);
+    await act(async () => category.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })));
+    expect(category.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => button('Clear category filter').click());
+    expect(category.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(PAGE_SIZE);
+    expect(host.querySelector('[aria-label="Clear category filter"]')).toBeNull();
+  });
+
+  it('combines manager category/status filters and clears both from the header, respecting reduced motion and self-review isolation', async () => {
+    state.user = demoUsers.find((user) => user.username === 'khalid');
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const expenses = createDemoData();
+    vi.spyOn(api, 'allExpenses').mockResolvedValue(expenses);
+    await render(router(<ManagerDashboard />));
+    const ledger = host.querySelector('#department-expenses');
+    const scroll = vi.fn(); ledger.scrollIntoView = scroll;
+    const category = host.querySelector('[aria-label="Filter by Software & subscriptions"]');
+    await act(async () => category.click());
+    expect(scroll).toHaveBeenLastCalledWith({ behavior: 'auto', block: 'start' });
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(host.querySelector('tbody').textContent).toContain('EXP-102');
+    await act(async () => button('Approved').click());
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(host.querySelector('tbody').textContent).toContain('EXP-105');
+    await act(async () => button('View expenses by category').click());
+    expect(category.getAttribute('aria-pressed')).toBe('false');
+    expect(button('All').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[aria-label="Clear category filter"]')).toBeNull();
+    expect(host.querySelectorAll('tbody tr')).toHaveLength(PAGE_SIZE);
+    expect(ledger.textContent).toContain('1–6 of 13 expenses');
+    expect(host.querySelector('a[href="/manager/expenses/112"]')).toBeNull();
+    await act(async () => host.querySelector('[aria-label="Next page"]').click());
+    await act(async () => button('View expenses by category').click());
+    expect(ledger.textContent).toContain('1–6 of 13 expenses');
+    expect(scroll).toHaveBeenCalledTimes(3);
+  });
+
+  it('recalculates every hero metric and allocation for Daily, Weekly and All time using Riyadh calendar days', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T09:00:00Z'));
+    const expenses = [
+      { date: '2026-11-17', amount: '100', status: STATUS.APPROVED },
+      { created_at: '2026-11-16T22:30:00Z', amount: '20', status: STATUS.PENDING_MANAGER },
+      { date: '2026-11-11', amount: '30', status: STATUS.NEEDS_CHANGES },
+      { date: '2026-11-10', amount: '40', status: STATUS.APPROVED },
+      { date: '2026-11-18', amount: '50', status: STATUS.APPROVED },
+      { date: 'invalid', amount: '60', status: STATUS.REJECTED },
+      { date: '2026-11-16', created_at: '2026-11-17T09:00:00Z', amount: '70', status: STATUS.PENDING_FINANCE },
+    ];
+    await render(<SummaryCards expenses={expenses} />);
+    const headline = () => host.querySelector('.hero-number .sr-only').textContent;
+    const metrics = () => [...host.querySelectorAll('.hero-metrics .sr-only')].map((node) => node.textContent);
+    const allocations = () => [...host.querySelectorAll('.hero-allocation > span')].map((node) => parseFloat(node.style.width));
+    expect(host.querySelector('[role="group"][aria-label="Spend timeframe"]')).not.toBeNull();
+    expect(button('All time').getAttribute('aria-pressed')).toBe('true');
+    expect(headline()).toBe('370.00');
+    expect(metrics()).toEqual(['190.00', '90.00', '30.00', '43%']);
+    await act(async () => button('Daily').click());
+    expect(button('Daily').getAttribute('aria-pressed')).toBe('true');
+    expect(button('All time').getAttribute('aria-pressed')).toBe('false');
+    expect(headline()).toBe('120.00');
+    expect(host.querySelector('.hero-request-count').textContent).toContain('2 requests');
+    expect(metrics()).toEqual(['100.00', '20.00', '0.00', '50%']);
+    expect(allocations()[0]).toBeCloseTo(100 / 120 * 100);
+    expect(allocations()[2]).toBe(0);
+    await act(async () => button('Weekly').click());
+    expect(button('Weekly').getAttribute('aria-pressed')).toBe('true');
+    expect(button('Daily').getAttribute('aria-pressed')).toBe('false');
+    expect(headline()).toBe('220.00');
+    expect(host.querySelector('.hero-request-count').textContent).toContain('4 requests');
+    expect(metrics()).toEqual(['100.00', '90.00', '30.00', '25%']);
+    expect(allocations()[2]).toBeCloseTo(30 / 220 * 100);
+    await act(async () => button('All time').click());
+    expect(headline()).toBe('370.00');
+    expect(host.querySelector('.hero-request-count').textContent).toContain('7 requests');
+    expect(metrics()).toEqual(['190.00', '90.00', '30.00', '43%']);
+  });
+
+  it('shows zero final values for a timeframe without matching expenses', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-17T09:00:00Z'));
+    await render(<SummaryCards expenses={[{ date: '2026-10-01', amount: '75', status: STATUS.APPROVED }]} />);
+    await act(async () => button('Daily').click());
+    expect(host.querySelector('.hero-number .sr-only').textContent).toBe('0.00');
+    expect(host.querySelector('.hero-request-count').textContent).toContain('0 requests');
+    expect([...host.querySelectorAll('.hero-metrics .sr-only')].map((node) => node.textContent)).toEqual(['0.00', '0.00', '0.00', '0%']);
+    expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
+  });
+
   it('distinguishes rejection and returned timeline entries while preserving intact Arabic notes', async () => {
     const decisions = [STATUS.APPROVED, STATUS.REJECTED, STATUS.NEEDS_CHANGES, DECISION.REJECT, DECISION.REQUEST_CHANGES];
     await render(<ApprovalTimeline createdAt="2026-11-15" requesterName="سارة العتيبي" approvals={decisions.map((decision, id) => ({
@@ -84,7 +212,7 @@ describe('UI behavior with unavailable browser animation APIs', () => {
     const expenses = createDemoData();
     vi.spyOn(api, 'allExpenses').mockResolvedValue(expenses);
     await render(router(<ManagerDashboard />));
-    const countCard = [...host.querySelectorAll('[data-spotlight-card]')].find((node) => node.textContent.includes('Requests awaiting review'));
+    const countCard = host.querySelector('[aria-label="Awaiting review"]');
     const pending = expenses.filter((entry) => entry.status === STATUS.PENDING_MANAGER && entry.requester.id !== state.user.id);
     expect(countCard.querySelector('.sr-only').textContent).toBe(String(pending.length));
     expect(host.querySelectorAll('tbody tr')).toHaveLength(pending.length);
@@ -232,13 +360,15 @@ describe('UI behavior with unavailable browser animation APIs', () => {
     expect(host.querySelector('p').parentElement.style.opacity).toBe('1');
   });
 
-  it('renders dynamic employee totals, five KPI groups and the filtered changes link', async () => {
+  it('renders dynamic employee totals in one bento hero and preserves the filtered changes link', async () => {
     const expenses = createDemoData().filter((expense) => expense.requester.id === state.user.id);
     vi.spyOn(api, 'allExpenses').mockResolvedValue(expenses);
     await render(router(<EmployeeDashboard />));
     const total = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
     expect(host.textContent).toContain(total.toLocaleString('en-US', { minimumFractionDigits: 2 }));
-    expect(host.querySelectorAll('[data-spotlight-card]')).toHaveLength(5);
+    expect(host.querySelectorAll('[data-spotlight-card]')).toHaveLength(1);
+    expect(host.querySelectorAll('.hero-metrics > div')).toHaveLength(4);
+    expect(host.querySelector('[aria-label="Spend by Category"]').textContent).toContain('Average claim');
     const callout = [...host.querySelectorAll('a')].find((node) => node.textContent.includes('A quick update is needed'));
     expect(callout.getAttribute('href')).toBe(`/employee/expenses?status=${STATUS.NEEDS_CHANGES}`);
     expect(host.querySelector('canvas')).toBeNull();

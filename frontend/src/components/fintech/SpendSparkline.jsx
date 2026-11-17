@@ -2,34 +2,40 @@ import { useId, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { CURRENCY } from '../../utils/constants';
 import { formatDate, formatMoney } from '../../utils/formatters';
-import { sparklineGeometry, weeklyApprovedSpend } from './spendData';
-import { canMeasureSvgPath, useFintechMotion } from './useFintechMotion';
+import { weeklyApprovedSpend } from './spendData';
+import { useFintechMotion } from './useFintechMotion';
 
 export default function SpendSparkline({ expenses, endDate, className = '' }) {
   const { enabled } = useFintechMotion();
   const id = `spend-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const weeks = useMemo(() => weeklyApprovedSpend(expenses, endDate), [expenses, endDate]);
-  const { line, area, end, maximum } = sparklineGeometry(weeks.map((week) => week.amount));
-  const draw = enabled && canMeasureSvgPath();
-  const Path = draw ? motion.path : 'path';
-  const Dot = draw ? motion.circle : 'circle';
-  return (
-    <figure className={className}>
-      <figcaption className="mb-3 flex flex-wrap justify-between gap-2 text-[11px] text-slate-400">
-        <span>Spend velocity</span><span>Approved expenses · Last 6 weeks</span>
-      </figcaption>
-      <svg viewBox="0 0 180 48" className="h-12 w-full overflow-visible" role="img" aria-labelledby={`${id}-title ${id}-description`}>
-        <title id={`${id}-title`}>Weekly approved spend in {CURRENCY}</title>
-        <desc id={`${id}-description`}>{weeks.map((week) => `Week of ${week.date}: ${formatMoney(week.amount)}`).join('; ') || 'No recent expenses.'}</desc>
-        <defs><linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(16, 185, 129, 0.14)" /><stop offset="100%" stopColor="rgba(16, 185, 129, 0)" /></linearGradient></defs>
-        {area && <path d={area} fill={`url(#${id}-gradient)`} />}
-        {line && <Path d={line} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
-          {...(draw ? { initial: { pathLength: 0, opacity: 0.4 }, animate: { pathLength: 1, opacity: 1 }, transition: { duration: 0.85, ease: 'easeOut' } } : {})} />}
-        {end && <Dot cx={end.x} cy={end.y} r="2.5" fill="#10b981" stroke="white" strokeWidth="1.5"
-          {...(draw ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { delay: 0.85, duration: 0.18 } } : {})} />}
-      </svg>
-      {weeks.length > 0 && <div aria-hidden="true" className="mt-2 flex justify-between text-[10px] tabular-nums text-slate-400"><span>{formatDate(weeks[0].date, { year: undefined })}</span><span>{formatDate(weeks.at(-1).date, { year: undefined })}</span></div>}
-      {maximum === 0 && <p className="mt-2 text-xs text-slate-400">No approved spend in this period.</p>}
-    </figure>
-  );
+  const maximum = Math.max(0, ...weeks.map((week) => week.amount));
+  const total = weeks.reduce((sum, week) => sum + week.amount, 0);
+  const Bar = enabled ? motion.rect : 'rect';
+  return <figure className={className}>
+    <figcaption className="mb-5 flex flex-wrap items-start justify-between gap-3">
+      <div><h2 className="bento-title">Spend velocity</h2><p className="mt-1.5 text-[11px] text-zinc-400">Approved expenses · Last 6 weeks</p></div>
+      <p className="text-lg font-semibold tracking-tight tabular-nums text-zinc-900">{formatMoney(total)}</p>
+    </figcaption>
+    <svg viewBox="0 0 600 155" className="block w-full" role="img" aria-labelledby={`${id}-title ${id}-description`}>
+      <title id={`${id}-title`}>Weekly approved spend in {CURRENCY}</title>
+      <desc id={`${id}-description`}>{weeks.map((week) => `Week of ${week.date}: ${formatMoney(week.amount)}`).join('; ') || 'No recent expenses.'}</desc>
+      {[20, 80, 140].map((y) => <line key={y} x1="0" x2="600" y1={y} y2={y} stroke="#F0F0ED" strokeDasharray="3 5" aria-hidden="true" />)}
+      {weeks.map((week, index) => {
+        const current = index === weeks.length - 1;
+        // A zero-spend current week gets a small baseline marker, never a fabricated full-height total.
+        const height = Math.max(current ? 4 : 0, maximum > 0 ? week.amount / maximum * 125 : 0);
+        const x = index * 100 + 24;
+        return <g key={week.date}>
+          <Bar data-spend-bar="" data-current={current ? 'true' : undefined} className={current ? 'spend-bar-current' : 'spend-bar-history'} x={x} y={140 - height} width="52" height={height} rx="7" fill={current ? '#1F5C3B' : '#DFDFDA'}
+            {...(enabled ? { initial: { attrY: 140, height: 0 }, animate: { attrY: 140 - height, height }, transition: { duration: 0.7, delay: index * 0.04, ease: 'easeOut' } } : {})}>
+            <title>{formatDate(week.date, { year: undefined })}: {formatMoney(week.amount)}</title>
+          </Bar>
+        </g>;
+      })}
+    </svg>
+    <div className="grid grid-cols-6 text-center text-[9px] tabular-nums text-zinc-400 sm:text-[10px]" aria-hidden="true">{weeks.map((week, index) => <span key={week.date} className={index === weeks.length - 1 ? 'font-medium text-[#1F5C3B]' : ''}>{formatDate(week.date, { year: undefined })}</span>)}</div>
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-400"><span>Weekly totals · {CURRENCY}</span><span className="inline-flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-[#1F5C3B]" />Current week</span></div>
+    {maximum === 0 && <p className="mt-3 text-xs text-zinc-400">No approved spend in this period.</p>}
+  </figure>;
 }

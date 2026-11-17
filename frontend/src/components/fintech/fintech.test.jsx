@@ -45,7 +45,7 @@ afterEach(async () => {
 });
 const render = async (element) => act(async () => { root.render(element); });
 const router = (element, path = '/') => <MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>;
-const button = (text) => [...host.querySelectorAll('button')].find((node) => node.textContent.trim() === text);
+const button = (text) => [...host.querySelectorAll('button')].find((node) => node.getAttribute('aria-label') === text || node.textContent.trim() === text);
 async function setInput(node, value) {
   const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), 'value').set;
   await act(async () => { setter.call(node, value); node.dispatchEvent(new Event(node.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); });
@@ -100,13 +100,17 @@ describe('financial data and progress', () => {
     expect(weeks.reduce((sum, week) => sum + week.amount, 0)).toBe(170.3);
     expect(weeklyApprovedSpend([], 'invalid')).toEqual([]);
   });
-  it('produces finite flat/empty SVG paths and unique gradient IDs without SVG measurement', async () => {
+  it('produces finite empty bars and unique accessible chart IDs without SVG measurement', async () => {
     expect(sparklineGeometry([]).line).toBe('');
     expect(sparklineGeometry([0, 0, NaN]).line).not.toMatch(/NaN|Infinity/);
     await render(<><SpendSparkline expenses={[]} endDate="2026-11-17" /><SpendSparkline expenses={createDemoData()} endDate="2026-11-17" /></>);
-    const ids = [...host.querySelectorAll('linearGradient')].map((node) => node.id);
+    const ids = [...host.querySelectorAll('svg > title')].map((node) => node.id);
     expect(new Set(ids).size).toBe(2);
-    expect(host.querySelector('svg').getAttribute('viewBox')).toBe('0 0 180 48');
+    expect(host.querySelector('svg').getAttribute('viewBox')).toBe('0 0 600 155');
+    expect(host.querySelectorAll('[data-spend-bar]')).toHaveLength(12);
+    expect(host.querySelectorAll('[data-spend-bar][fill="#1F5C3B"]')).toHaveLength(2);
+    expect(host.querySelectorAll('[data-spend-bar][fill="#DFDFDA"]')).toHaveLength(10);
+    expect([...host.querySelectorAll('svg')[0].querySelectorAll('[data-spend-bar]')].map((bar) => Number(bar.getAttribute('height')))).toEqual([0, 0, 0, 0, 0, 4]);
     expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
   });
   it('handles a throwing SVG geometry implementation gracefully', async () => {
@@ -116,7 +120,7 @@ describe('financial data and progress', () => {
     try {
       expect(canMeasureSvgPath()).toBe(false);
       await render(<SpendSparkline expenses={createDemoData()} endDate="2026-11-17" />);
-      expect(host.querySelector('path[stroke="#10b981"]')).not.toBeNull();
+      expect(host.querySelectorAll('[data-spend-bar]')).toHaveLength(6);
     } finally {
       if (original) Object.defineProperty(SVGElement.prototype, 'getTotalLength', original);
       else delete SVGElement.prototype.getTotalLength;
@@ -125,18 +129,21 @@ describe('financial data and progress', () => {
 });
 
 describe('receipts, motion preferences and filtering', () => {
-  it('renders immediate final progress, statuses, paths and rows for reduced motion', async () => {
+  it('renders immediate final progress, statuses, bars and rows for reduced motion', async () => {
     enableFrames({ reduced: true, layout: true });
     const expenses = createDemoData().slice(0, 2);
     await render(router(<><BudgetProgressBar spent={75} budget={100} />
       <ApprovalProgressBar status={STATUS.PENDING_FINANCE} />
       <StatusBadge status={STATUS.APPROVED} />
-      <SpendSparkline expenses={expenses} endDate="2026-11-17" />
+      <SpendSparkline expenses={createDemoData()} endDate="2026-11-17" />
       <ExpenseTable expenses={expenses} onSelect={vi.fn()} /></>));
     expect(host.querySelector('[role="progressbar"]').firstElementChild.style.width).toBe('75%');
     expect(host.querySelector('[aria-current="step"]').textContent).toContain('Finance Review');
     expect(host.querySelector('[data-status]').textContent).toBe('Approved');
-    expect(host.querySelector('svg[role="img"] path[stroke="#10b981"]').getAttribute('stroke-dasharray')).toBeNull();
+    const bars = [...host.querySelectorAll('[data-spend-bar]')];
+    expect(bars).toHaveLength(6);
+    expect(Math.max(...bars.map((bar) => Number(bar.getAttribute('height'))))).toBe(125);
+    expect(bars.every((bar) => Number(bar.getAttribute('y')) + Number(bar.getAttribute('height')) === 140)).toBe(true);
     expect(host.querySelectorAll('tbody tr')).toHaveLength(2);
     expect(host.querySelectorAll('[data-projection-id]')).toHaveLength(0);
   });
