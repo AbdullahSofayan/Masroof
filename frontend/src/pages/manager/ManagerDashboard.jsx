@@ -22,8 +22,9 @@ export default function ManagerDashboard() {
   const { data, loading, error, reload } = useAsync(() => api.allExpenses({ view: 'department' }), [user.id]);
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} retry={reload} />;
-  const queue = data.filter((entry) => entry.status === STATUS.PENDING_MANAGER);
-  const filtered = status ? data.filter((entry) => entry.status === status) : data;
+  const reviewable = data.filter((entry) => entry.requester?.id !== user.id);
+  const queue = reviewable.filter((entry) => entry.status === STATUS.PENDING_MANAGER);
+  const filtered = status ? reviewable.filter((entry) => entry.status === status) : reviewable;
   const approved = data.filter((entry) => entry.status === STATUS.APPROVED).reduce((sum, entry) => sum + Number(entry.amount), 0);
 
   return (

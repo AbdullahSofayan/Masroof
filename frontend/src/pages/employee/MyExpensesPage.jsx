@@ -21,7 +21,7 @@ function ExpenseDrawer({ id, onClose, onChanged }) {
   async function mutate(action) {
     setBusy(true); setError('');
     try {
-      if (action === 'delete') { await api.deleteExpense(id); notify('Expense deleted.'); onChanged(); onClose(); }
+      if (action === 'delete') { await api.deleteExpense(id); notify('Expense deleted.'); onChanged('delete'); }
       else { await api.resubmitExpense(id); notify('Expense resubmitted for manager review.'); onChanged(); detail.reload(); }
     } catch (err) { setError(err.message); if (err.status === 409) detail.reload(); } finally { setBusy(false); }
   }
@@ -30,11 +30,31 @@ function ExpenseDrawer({ id, onClose, onChanged }) {
 }
 export default function MyExpensesPage() {
   const [params, setParams] = useSearchParams(); const { user } = useAuth();
-  const rawPage = Number(params.get('page')); const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  const rawPage = Number(params.get('page'));
+  const requestedPage = Number.isInteger(rawPage) ? Math.max(1, rawPage) : 1;
   const status = Object.hasOwn(STATUS_META, params.get('status')) ? params.get('status') : '';
   const selected = params.get('expense');
-  const { data, loading, error, reload } = useAsync(() => api.listExpenses({ page, size: PAGE_SIZE, status, view: 'own' }), [page, status, user.id]);
+  const { data, loading, error, reload } = useAsync(async () => {
+    const options = { size: PAGE_SIZE, status, view: 'own' };
+    const result = await api.listExpenses({ ...options, page: requestedPage });
+    // The API paginates results; use its filtered total before fetching an out-of-range page again.
+    const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+    const activePage = Math.min(requestedPage, totalPages);
+    return activePage === requestedPage || result.total === 0
+      ? result
+      : api.listExpenses({ ...options, page: activePage });
+  }, [requestedPage, status, user.id]);
+  const totalPages = Math.max(1, Math.ceil((data?.total || 0) / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
   function update(values) { setParams((previous) => { const next = new URLSearchParams(previous); Object.entries(values).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key)); return next; }); }
-  function changed() { update({ page: '' }); reload(); }
+  function changed(action) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('page');
+      if (action === 'delete') next.delete('expense');
+      return next;
+    });
+    reload();
+  }
   return <><PageHeading eyebrow="Employee workspace" title="My expenses" description="Every submission, every update, all in one place." action={<Link to="/employee/expenses/new" className="btn-primary"><Plus size={17} />New expense</Link>} /><section className="card overflow-hidden" aria-busy={loading}><div className="card-heading"><div><h2 className="font-semibold">Expense history</h2><p className="mt-1 text-xs text-slate-400">Select a request to see its receipt and approval history.</p></div></div><ExpenseStatusFilters value={status} onChange={(value) => update({ status: value, page: "" })} />{loading && data && <p role="status" className="sr-only">Updating expenses…</p>}{loading && !data ? <Spinner /> : error ? <div className="p-5"><ErrorBox message={error} retry={reload} /></div> : <><ExpenseTable expenses={data.items} onSelect={(id) => update({ expense: id })} emptyTitle={status ? 'No matching expenses' : 'Your first expense starts here'} emptyDescription={status ? 'Try another status to find your request.' : 'Submit a work expense with its receipt to get started.'} /><Pagination page={page} size={PAGE_SIZE} total={data.total} onChange={(value) => update({ page: value })} /></>}</section>{selected && <ExpenseDrawer key={selected} id={selected} onClose={() => update({ expense: '' })} onChanged={changed} />}</>;
 }

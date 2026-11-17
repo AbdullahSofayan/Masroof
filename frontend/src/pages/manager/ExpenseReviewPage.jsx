@@ -30,6 +30,7 @@ export default function ExpenseReviewPage() {
   const canDecide = pending && !own && expense.department.id === user.department_id;
 
   async function decide(decision) {
+    if (decision === DECISION.APPROVE && !expense?.attachment_url) return;
     setBusy(decision); setError('');
     try {
       const result = await api.decide(id, decision, note);
@@ -59,7 +60,8 @@ export default function ExpenseReviewPage() {
             <textarea id="manager-note" className="input min-h-32 resize-y leading-7" dir="auto" placeholder="Share the context your employee needs…" maxLength={NOTE_MAX_LENGTH} value={note} onChange={(event) => setNote(event.target.value)} disabled={!!busy} />
             <p className="mt-2 text-right text-xs tabular-nums text-slate-400">{note.length} / {NOTE_MAX_LENGTH}</p>
             <div className="mt-5 grid gap-3">
-              <button className="btn-primary w-full justify-center" disabled={!!busy} onClick={() => decide(DECISION.APPROVE)}>{busy === DECISION.APPROVE ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}Approve expense</button>
+              <button className="btn-primary w-full justify-center" disabled={!!busy || !expense?.attachment_url} aria-describedby={!expense?.attachment_url ? 'approval-receipt-required' : undefined} onClick={() => decide(DECISION.APPROVE)}>{busy === DECISION.APPROVE ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}Approve expense</button>
+              {!expense?.attachment_url && <p id="approval-receipt-required" className="text-xs text-slate-500">Receipt attachment required before approval</p>}
               <div className="grid grid-cols-2 gap-3">
                 <button className="btn-secondary justify-center text-xs" disabled={!!busy || !note.trim()} onClick={() => decide(DECISION.REQUEST_CHANGES)}>{busy === DECISION.REQUEST_CHANGES ? <LoaderCircle size={15} className="animate-spin" /> : <MessageSquare size={15} />}Request changes</button>
                 <button className="btn-danger justify-center text-xs" disabled={!!busy || !note.trim()} onClick={() => decide(DECISION.REJECT)}>{busy === DECISION.REJECT ? <LoaderCircle size={15} className="animate-spin" /> : <X size={15} />}Reject expense</button>
