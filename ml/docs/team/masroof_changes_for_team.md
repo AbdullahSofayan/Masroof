@@ -2,7 +2,7 @@
 
 *From: Jassar (ML) · 16 Nov 2026 · Based on the latest ERD*
 
-**✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below.** Omar's first code is on `backend/expense` (18 Nov) → checked in **"Repo check — 18 Nov (afternoon)"** at the end: 4 changes for the AI part.
+**✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below, and the final ERD (Abdulaziz, 18 Nov evening) has all of them.** Omar's first code is on `backend/expense` (18 Nov) → checked in **"Repo check — 18 Nov (afternoon)"** at the end: 4 changes for the AI part.
 
 These changes let the backend store and show the AI model's results correctly.
 Each one has a reason, so you can push back if something doesn't fit.
@@ -95,7 +95,7 @@ backend reject it, so a request never sits in "Pending" forever.
 - The ML service **never connects to the database** — the backend sends the data.
 - Score in a **background task** after a request is created or edited, so the employee never waits.
 - If the ML service is down, **save the request anyway** with no AI result, and score it later.
-- Full details: `ml/docs/ml_contract.md` (**v0.4.1**, matches this ERD) on the `ml/stub-service` branch.
+- Full details: `ml/docs/ml_contract.md` (**v0.4.3**, matches the final ERD) on the `ml/stub-service` branch.
   Backend → Parts B, C, E · Frontend → Part D. Part C is reference code written against the ERD; **C10** checks it against Omar's first `backend/expense` code.
 
 ---
@@ -184,6 +184,67 @@ Simplest fix for 1–3: `evaluate_expense` does **rules only** (returns `{"warni
 - No edit endpoint yet; when it's added, re-score the request after the edit (C4).
 
 Other branches: no new commits since 17 Nov (`frontend/employee-manager` and `ml/forecasting` items above are still open).
+
+---
+
+## Update — 18 Nov (ML Step 6 finished) · contract v0.4.2
+
+Only two things touch the other teams:
+
+1. **Seed data: 13 employees are left out.** They usually send 5+ requests a day (bulk travel / equipment buyers
+   on shared cards, not personal expenses), so the model is trained without them. Ids **1194, 1237, 1752, 1759,
+   2712, 4097, 4438, 4481, 4851, 5060, 5112, 5438, 5571** won't be in `users.csv` or `expenses.csv`.
+   Nothing to do on your side, just don't reuse those ids for test users (contract E3).
+2. **Reason codes are final: all 10 stay** (contract B7). One text changed:
+   `amount_high_for_department` → "Amount is much higher than usual for this department in this category" /
+   "المبلغ أعلى بكثير من المعتاد في هذا القسم لهذه الفئة" (it's now used for new employees, who are compared with their department).
+   Frontend: no change needed, the text comes from the API. The stub already returns the new text.
+
+Still needed from the team for ML Step 7 (training): **how many flagged requests a manager can realistically review per week** (mentor feedback MF4).
+
+---
+
+## Repo check — 18 Nov (evening) · contract v0.4.3
+
+### Final ERD (Abdulaziz) ✅
+All 7 agreed changes are in: `role` enum, `risk_level` (low/medium/high, nullable), `risk_justification` JSON (spelled right),
+the nullable columns, `requires_review` removed, statuses `Pending` / `Approved` / `Rejected` with one reviewer (`reviewed_by`),
+`EXPENSE_LIMITS` = one `max_amount` per category, `BUDGET` = department + year + month.
+
+Two small things on the ML side to match it (contract v0.4.3):
+- `users.csv` (seed) has **no `is_active`** column anymore (it's not in the ERD).
+- `expense.warnings` is saved as an **empty list `[]`** when no rule was broken, never null (contract C5).
+
+Please confirm: the **index on `expense (requester_id, expense_date)`** is in your model (contract C1). ERD diagrams don't show indexes,
+and it's what makes the "same-day requests" query fast.
+
+### `main`
+`backend/expense` (PR #1) and `backend/finance` (PR #2) are merged. ✅ All tests pass now (the `finance_service` import works on `main`).
+❌ The **4 AI fixes in contract C10 are still open** (the code on `main` is the same as Omar's first version):
+1. Read `score` (not `anomaly_score`) from the ML response → save it in `anomaly_score`
+2. Save `reason_details` → `risk_justification`
+3. Score **after** saving, in a background task (needs `expense_id` and the same-day requests)
+4. `category` vs `category_id` in the create schema / service
+
+### `frontend/finance` (Majed, new)
+Careful work (tests, budget warnings), but branched from `frontend/employee-manager`, so it carries the old design:
+
+| # | In the code | Agreed (final ERD + contract) |
+|---|---|---|
+| 1 | Finance approves requests ("Approve for payment", payout queue, `pending_finance`) | **Only the department manager approves**, one step. `finance_admin` sets budgets and limits and sees the dashboard |
+| 2 | `RiskAlertBox` on finance's request page, with **"Anomaly score: 78%"** and `warnings` shown as the AI's reasons | finance_admin sees **no AI on single requests**; nobody sees the score; AI reasons ≠ rule warnings (contract A3, C7, D3, D4) |
+| 3 | Finance dashboard has no AI section | Dashboard AI summary: requests by risk level, flagged % per department, top reasons (contract C9, D4) |
+| 4 | Old 5 categories (Meals & hospitality, …) | Food, Travel, Transportation, Office Supplies, IT & Telecom, Equipment & Maintenance |
+| 5 | Limits 1,500 / 2,500 / 1,000 / 3,000 on 4 categories, as `/policies` with `is_allowed` | `EXPENSE_LIMITS`: one `max_amount` per category: Food 2,000 · Travel 10,000 · Transportation 5,000 · Office Supplies 3,000 · IT & Telecom 7,500 · Equipment & Maintenance 7,500 |
+| 6 | Budgets can be monthly **or annual** | `BUDGET` is per department, per **month** only |
+
+**Forecast API proposal:** `financeApi.forecast()` proposes `GET /forecast?department_id=` → 8 weeks of history, 4 predicted weeks,
+last-week baseline. It matches the forecasting notebook (Linear Regression, 4 weeks, last-week baseline). **Abdullah (forecasting)
+and the backend should agree on it with Majed**; it also answers the open question "does forecasting join the ML service or get its own URL?".
+
+### Unchanged since 17 Nov
+- `frontend/employee-manager` (Ziyad): the 4 mismatches above (categories, statuses, score as %, warnings as AI reasons) are still open.
+- `ml/forecasting` (Abdullah): `ml/data/*.csv` still committed to git.
 
 ---
 

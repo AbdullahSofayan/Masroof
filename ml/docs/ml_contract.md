@@ -1,7 +1,7 @@
 # ML Contract — Masroof Anomaly Detection
 
 **Owner:** ML (Jassar) · **For:** Backend (`backend/expense`, `backend/finance`), Frontend (`frontend/employee-manager`)
-**Version:** v0.4.1 — 18 Nov 2026 · Based on the **new ERD** (OK'd by the backend on 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code
+**Version:** v0.4.3 — 18 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code · v0.4.2 = reason codes final after Step 6, 13 bulk buyers left out of the seed · v0.4.3 = final ERD check
 **Stub:** the ML service works now with fake scores (`stub-0.2`). The real model (Step 9) keeps the same endpoints and fields.
 
 Everything the backend and frontend need from ML is in this file.
@@ -30,7 +30,7 @@ employee's own earlier requests, their department, and the category. It returns 
 
 What it looks for:
 - An amount much higher than this employee usually requests (overall, and in this category)
-- An amount much higher than usual for the department
+- For new employees (fewer than 5 earlier requests): an amount much higher than usual for their department in this category
 - A category this employee rarely uses
 - Several requests in the same category for the same day (splitting to stay under a limit)
 - The same amount requested twice for the same day
@@ -223,13 +223,15 @@ Response: `{"results": [ <same response as /anomaly/score>, ... ]}` (same order)
 
 ## B7. Reason codes
 
-Drafts. Final texts in Step 8; the list may get shorter after Step 6.
+**The list is final (Step 6, 18 Nov): all 10 codes stay.** The texts may still be polished in Step 8.
+The three "amount" reasons come from one feature; which one is shown depends on what the amount was compared with
+(the employee in this category → the employee overall → the department in this category, for new employees).
 
 | Code | English | Arabic |
 |---|---|---|
 | `amount_high_for_employee` | Amount is much higher than this employee's usual requests | المبلغ أعلى بكثير من معدل طلبات هذا الموظف |
 | `amount_high_for_employee_category` | Amount is much higher than this employee usually requests in this category | المبلغ أعلى بكثير مما يطلبه هذا الموظف عادةً في هذه الفئة |
-| `amount_high_for_department` | Amount is much higher than usual for this department | المبلغ أعلى بكثير من المعتاد في هذا القسم |
+| `amount_high_for_department` | Amount is much higher than usual for this department in this category | المبلغ أعلى بكثير من المعتاد في هذا القسم لهذه الفئة |
 | `large_amount` | Very large amount | مبلغ كبير جداً |
 | `unusual_category_for_employee` | This employee rarely submits requests in this category | نادراً ما يقدّم هذا الموظف طلبات في هذه الفئة |
 | `weekend_expense` | Expense date falls on a weekend (Friday–Saturday) | تاريخ المصروف في عطلة نهاية الأسبوع (الجمعة–السبت) |
@@ -433,7 +435,7 @@ warnings = [w for w in (
     limit_warning(body.amount, limit.max_amount if limit else None),
     budget_warning(spent_this_month, body.amount, budget.amount if budget else None),
 ) if w]
-expense.warnings = warnings or None
+expense.warnings = warnings          # [] when no rule was broken (the ERD's warnings column isn't nullable)
 ```
 
 - `warnings` = **rules**. `risk_justification` = **AI**. Never mix them: the frontend shows them as two sections.
@@ -639,7 +641,7 @@ From the backend only. On each expense:
 |---|---|---|
 | `ai.risk_level` | `low` / `medium` / `high` | Viewer isn't the department manager, or not scored yet |
 | `ai.reasons` | List of `{code, text_en, text_ar}` | Same |
-| `warnings` | List of rule texts (over limit, over budget) | No rule was broken |
+| `warnings` | List of rule texts (over limit, over budget) | Never null: an empty list `[]` when no rule was broken |
 
 **Never call the ML service directly, and never show `anomaly_score`** (the backend doesn't send it).
 
@@ -764,7 +766,7 @@ For realistic requests to design with, use `ml/docs/samples/sample_requests.csv`
 
 ## E1. Status
 
-The ERD is final (OK'd 18 Nov), so the format below is fixed. **ML exports the files when the team says
+The ERD is final (OK'd 18 Nov; final version checked 18 Nov evening), so the format below is fixed. **ML exports the files when the team says
 go** — after deciding how much history goes in (E7). Don't import the Step 4 training files
 (`requests.csv`, `users.csv`, `departments.csv`): they have extra ML-only columns.
 
@@ -799,7 +801,6 @@ Ids: 1 Food · 2 Travel · 3 Transportation · 4 Office Supplies · 5 IT & Telec
 | `full_name` | Yazeed Al-Muqrin | Arabic name in English letters |
 | `role` | employee | `employee`, `manager` or `finance_admin` |
 | `department_id` | 1 | Empty for finance admins |
-| `is_active` | true | |
 
 No password in the file: the seed script sets one demo password (E4).
 
@@ -837,7 +838,7 @@ No password in the file: the seed script sets one demo password (E4).
 | `reviewed_at` | 2026-06-26 10:30:00 | |
 | `manager_note` | *(empty)* | |
 | `receipt_path` | *(empty)* | |
-| `warnings` | *(empty)* | |
+| `warnings` | `[]` | Empty list (history has no rule warnings) |
 | `created_at` | 2026-06-25 16:02:00 | |
 | `updated_at` | 2026-06-26 10:30:00 | |
 
@@ -854,9 +855,14 @@ Please don't use these in your own test data.
 | 1–20 | Departments |
 | 101–120 | Department managers (no requests — managers don't submit) |
 | 201–202 | Finance admins |
-| 1001–5577 | Employees |
+| 1001–5577 | Employees (**13 ids are not in the seed**, see below) |
 | 100001–347838 | Expenses (history) |
 | 347839 and up | New requests created in the demo |
+
+**Not in the seed (Step 6):** 13 employees who usually send 5 or more requests a day (bulk travel / equipment
+buyers on shared cards, not personal expenses): **1194, 1237, 1752, 1759, 2712, 4097, 4438, 4481, 4851, 5060,
+5112, 5438, 5571**. The model is trained without them, so ML leaves them (and their expenses) out of `users.csv`
+and `expenses.csv`. Their ids are simply unused — don't reuse them for test users.
 
 ## E4. Import rules
 
@@ -916,7 +922,7 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 - Only the inside of `ml/src/predict.py` changes. **Endpoints, request and response stay the same.**
 - `model_version` changes from `stub-0.2`. Run `python -m app.rescore_ai --all` once.
 - The Medium / High cut-offs are set from **how many flags managers can review** (mentor feedback MF4).
-- Reason texts are finalized (Step 8); the list of reason codes may get shorter (Step 6).
+- Reason texts are finalized (Step 8). The list of 10 reason codes is final (Step 6).
 
 ## F3. Mentor feedback that touches this contract
 
@@ -937,6 +943,7 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 | Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Open |
 | Who builds receipt reading (`/receipt/...`)? | Team | Open |
 | Does forecasting join this service (`/forecast/...`) or get its own URL? | Forecasting + backend | Open |
+| Is the index on `expense (requester_id, expense_date)` in the model? (C1; ERD diagrams don't show indexes) | Backend | To confirm |
 | Align Part C with the real backend code | ML | 🟡 First version checked in C10 (18 Nov). Check again when MySQL + the ML call are added |
 
 ## F5. Changing this contract
@@ -946,6 +953,8 @@ file, then tells both teams. The version at the top goes up with every change.
 
 | Version | Date | Changes |
 |---|---|---|
+| v0.4.3 | 18 Nov | Final ERD check (all agreed changes in): `users.csv` without `is_active` (not in the ERD); `warnings` saved as `[]` instead of null (C5, D1, E2) |
+| v0.4.2 | 18 Nov | Step 6 results: the 10 reason codes are final (B7, F2); `amount_high_for_department` text → "…for this department in this category" (used for new employees); A1 wording; 13 bulk buyers left out of the seed (E3) |
 | v0.4.1 | 18 Nov | C10: checked Omar's first `backend/expense` code — what matches + 4 changes for the AI part (score field name, reasons, score after saving, category name vs id) |
 | v0.4 | 18 Nov | Rewritten for the new ERD: one approval step, `role` enum, AI columns `anomaly_score` / `risk_level` / `risk_justification`, rule warnings separate from AI reasons, ERD-based Part C, seed format with `categories`, `expense_limits`, `budget`, Step 4 ID ranges and limits, categories + statuses with Arabic labels, mentor feedback |
 | v0.3 | 15 Nov | Full integration for the `api/` skeleton (reverted the same day) |
