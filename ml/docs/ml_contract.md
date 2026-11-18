@@ -1,19 +1,20 @@
 # ML Contract — Masroof Anomaly Detection
 
-**Owner:** ML (Jassar) · **For:** Backend (`api/` on `main`) and Frontend
-**Version:** v0.3 — stub service works now; the real model (Step 9) keeps the same endpoints and fields
+**Owner:** ML (Jassar) · **For:** Backend (`backend/expense`, `backend/finance`), Frontend (`frontend/employee-manager`)
+**Version:** v0.4 — 18 Nov 2026 · Based on the **new ERD** (OK'd by the backend on 18 Nov) and the Step 4 demo data
+**Stub:** the ML service works now with fake scores (`stub-0.2`). The real model (Step 9) keeps the same endpoints and fields.
 
 Everything the backend and frontend need from ML is in this file.
 If something here needs to change, tell ML first, so the stub and the real model stay in sync.
 
 | Part | For | Contents |
 |---|---|---|
-| A | Everyone | What the model does, how it fits in, who sees what |
-| B | Backend | The ML service API |
-| C | Backend | Integration code, ready to paste |
-| D | Frontend | Badges, reasons, screens, texts, mock data |
-| E | Backend | Seed data format (files come from ML in Step 4) |
-| F | Everyone | Testing with the stub, what changes later, open questions |
+| A | Everyone | What the model does, how it fits in, who sees what, ports |
+| B | Backend | The ML service API + which response field goes into which EXPENSE column |
+| C | Backend | Integration code written against the ERD (adjust names to your code) |
+| D | Frontend | Badge, AI reasons vs rule warnings, screens per role, categories, statuses, texts, mock data |
+| E | Backend | Seed data: files, columns, ID ranges, import order, limits, budget |
+| F | Everyone | Testing with the stub, what changes later, mentor feedback, open questions, changelog |
 
 ---
 
@@ -21,16 +22,17 @@ If something here needs to change, tell ML first, so the stub and the real model
 
 ## A1. What the model does
 
-When an employee submits an expense request, the model checks how **unusual** it is compared to
-that employee's history, their department, and the category. It returns a risk level
-(low / medium / high) and up to 3 reasons. **It never approves or rejects anything**: it's a hint
-for the manager and finance.
+When an employee submits an expense request, the model checks how **unusual** it is compared to that
+employee's own earlier requests, their department, and the category. It returns a risk level
+(`low` / `medium` / `high`) and up to 3 reasons.
+
+**It never approves or rejects anything.** It's a hint for the department manager.
 
 What it looks for:
-- An amount much higher than this employee usually requests (overall and in this category)
+- An amount much higher than this employee usually requests (overall, and in this category)
 - An amount much higher than usual for the department
 - A category this employee rarely uses
-- Several requests in the same category for the same day (splitting to stay under a policy limit)
+- Several requests in the same category for the same day (splitting to stay under a limit)
 - The same amount requested twice for the same day
 - Many requests for the same day
 - Weekend dates (Friday–Saturday) and round amounts
@@ -38,47 +40,61 @@ What it looks for:
 ## A2. How it fits in
 
 ```
-Employee submits / edits / resubmits a request
+Employee submits a request (or edits it while it's Pending)
         │
         ▼
-Backend saves it (status unchanged) and returns the response immediately
+Backend
+  1. saves it with status = Pending
+  2. runs the RULE checks (finance_service: over the category limit, over the department budget)
+     → saves them in expense.warnings
+  3. returns the response to the employee immediately
         │
-        └──► background task: AnomalyService.score_expense_in_background(expense_id)
-                 1. load the expense + the requester's other requests for the same expense_date
-                 2. POST {AI_SERVICE_URL}/anomaly/score
-                 3. save the result on the expense (ai_analysis, ai_risk_level, ai_score)
-                 4. re-score the other same-day requests that are still pending
+        └──► background task (after the response)
+               4. loads the request + the employee's other requests for the same expense_date
+               5. POST {AI_SERVICE_URL}/anomaly/score
+               6. saves anomaly_score, risk_level, risk_justification on the expense
+               7. re-scores the employee's other Pending requests for that day
         │
         ▼
-Manager / finance open their queue → see the risk badge and reasons
+Department manager opens the Pending queue → risk badge + AI reasons + rule warnings
 ```
 
 Rules:
 - **The ML service never connects to the database.** The backend sends what the model needs.
 - **The frontend never calls the ML service.** It only reads what the backend returns.
-- **Scoring never blocks the workflow.** If the ML service is down, the request is saved with no AI
-  result and scored later (`python -m app.rescore_ai`).
+- **Scoring never blocks the workflow.** If the ML service is down, the request is saved with empty AI
+  columns and scored later (`python -m app.rescore_ai`, C6).
+- **Rule warnings and AI results are two different things**:
+
+| | Rule warnings | AI result |
+|---|---|---|
+| Comes from | Backend (`finance_service`) | ML service |
+| Asks | "Is this **allowed**?" (limit, budget) | "Is this **normal for this person**?" |
+| Stored in | `expense.warnings` | `expense.anomaly_score`, `risk_level`, `risk_justification` |
+| Shown as | "Policy warnings" | "AI risk check" |
 
 ## A3. Who sees what
 
-| User | Sees | Does not see |
-|---|---|---|
-| Employee (requester) | Nothing about AI, on their own requests | Risk, reasons, score |
-| Manager (`approvals.act_manager_step`) | Risk badge + reasons on their reports' requests | Raw score |
-| Finance (`approvals.act_finance_step`) | Risk badge + reasons on all requests they can see | Raw score |
-| Department / company viewers (`expenses.view_department` / `view_all`) | Risk badge + reasons | Raw score |
-| Finance dashboard | Counts by risk, flagged share per department, top reasons | — |
+Roles come from `users.role`.
 
-**Nobody sees the AI result on their own request**, even a manager who submits one.
+| Role | Sees | Never sees |
+|---|---|---|
+| `employee` | Their own requests and their status | Anything from the AI on their own requests |
+| `manager` | Risk badge + AI reasons + rule warnings on **their department's** requests | The raw `anomaly_score` |
+| `finance_admin` | Dashboard: requests by risk level, flagged share per department, top reasons — next to budgets | The raw `anomaly_score` |
+
+- Department managers **don't submit requests** (recommended: the backend blocks it, C4), so no one ever
+  sees the AI result on their own request.
+- `finance_admin` doesn't review requests in the new flow — only the department manager does.
 
 ## A4. Ports
 
 | Service | Port |
 |---|---|
-| Backend (`api/`) | 8000 |
-| ML service (`ml/`) | 8001 |
-| Frontend | 5173 |
-| MariaDB | 3306 |
+| Backend | 8000 |
+| ML service | 8001 |
+| Frontend (Vite) | 5173 |
+| MySQL | 3306 |
 
 ---
 
@@ -101,12 +117,12 @@ Backend `.env`:
 AI_SERVICE_URL=http://localhost:8001
 ```
 
-Optional Docker (add to `api/docker-compose.yml` under `services:`):
+Optional Docker (in your `docker-compose.yml`, under `services:`; adjust the path to the `ml/` folder):
 
 ```yaml
   ml:
     build: ../ml
-    container_name: expense-ml
+    container_name: masroof-ml
     ports:
       - "8001:8001"
 ```
@@ -118,40 +134,40 @@ Optional Docker (add to `api/docker-compose.yml` under `services:`):
 | GET | `/health` | `{"status": "ok", "model_version": "..."}` |
 | POST | `/anomaly/score` | Score one request |
 | POST | `/anomaly/score-batch` | Score up to 500 requests in one call (re-scoring, seed history) |
-| GET | `/anomaly/categories` | The category names the model accepts |
+| GET | `/anomaly/categories` | The 6 category names the model accepts |
 | GET | `/anomaly/reasons` | Every reason code with English + Arabic text |
 
-Paths start with `/anomaly/` so forecasting and receipt reading can be added to the same
-service later under their own prefix, behind the same `AI_SERVICE_URL`.
+Paths start with `/anomaly/` so other AI features (forecasting, receipt reading) can be added under their
+own prefix later, behind the same `AI_SERVICE_URL`.
 
 ## B3. `POST /anomaly/score` — request
 
 ```json
 {
-  "expense_id": 123,
-  "requester_id": 45,
-  "department_id": 7,
+  "expense_id": 347901,
+  "requester_id": 2259,
+  "department_id": 1,
   "category": "Office Supplies",
-  "amount": "450.00",
-  "expense_date": "2026-03-15",
+  "amount": "2500.00",
+  "expense_date": "2026-06-25",
   "same_day_requests": [
-    {"expense_id": 120, "category": "Office Supplies", "amount": "1900.00"}
+    {"expense_id": 347900, "category": "Office Supplies", "amount": "2400.00"}
   ]
 }
 ```
 
-| Field | Type | From | Notes |
+| Field | Type | From (ERD) | Notes |
 |---|---|---|---|
-| `expense_id` | int | `expenses.id` | |
-| `requester_id` | int | `expenses.requester_id` | |
-| `department_id` | int or null | `expenses.department_id` | Null allowed |
-| `category` | string | `categories.name` | **One of the 6 below, spelled exactly** |
-| `amount` | decimal > 0 | `expenses.amount` | SAR |
-| `expense_date` | `YYYY-MM-DD` | `expenses.expense_date` | |
-| `same_day_requests` | list | query in C4 | The requester's **other** requests with the same `expense_date`, **any status**, **not including this one**. `[]` if none |
+| `expense_id` | int | `expense.id` | |
+| `requester_id` | int | `expense.requester_id` | |
+| `department_id` | int or null | `expense.department_id` | The snapshot at submit. Null allowed |
+| `category` | string | `categories.name` (via `expense.category_id`) | **One of the 6 below, spelled exactly** |
+| `amount` | decimal > 0 | `expense.amount` | SAR |
+| `expense_date` | `YYYY-MM-DD` | `expense.expense_date` | |
+| `same_day_requests` | list | query in C3 | The employee's **other** requests with the same `expense_date`, **any status**, **not including this one**. `[]` if none |
 
-Rejected requests are included on purpose: someone who splits a request and gets one part
-rejected is still splitting.
+Rejected requests are included on purpose: someone who splits a request and gets one part rejected is
+still splitting.
 
 **Categories the model accepts** (must match `categories.name` exactly):
 
@@ -159,15 +175,15 @@ rejected is still splitting.
 Food, Travel, Transportation, Office Supplies, IT & Telecom, Equipment & Maintenance
 ```
 
-There is **no "Other" category**: the model is trained only on these 6.
-**If a category is renamed or added, tell ML first.** The model has to be retrained for it.
+There is **no "Other" category**: the model is trained only on these 6. Any other value returns **422**.
+**If a category is renamed or added, tell ML first** — the model has to be retrained for it.
 
 ## B4. `POST /anomaly/score` — response
 
 ```json
 {
-  "expense_id": 123,
-  "score": 0.871,
+  "expense_id": 347901,
+  "score": 0.8714902263,
   "risk_level": "high",
   "is_flagged": true,
   "reasons": [
@@ -186,10 +202,10 @@ There is **no "Other" category**: the model is trained only on these 6.
 
 | Field | Meaning |
 |---|---|
-| `score` | 0–1, higher = more unusual. **For sorting only, never shown to users** |
-| `risk_level` | `low` / `medium` / `high` |
+| `score` | 0–1, higher = more unusual. **Not rounded.** For sorting only — **never shown to users** |
+| `risk_level` | `low` / `medium` / `high` (always lowercase) |
 | `is_flagged` | `true` when medium or high |
-| `reasons` | English texts, 0–3, most important first. Empty when low |
+| `reasons` | English texts, 0–3, most important first. Empty when `low` |
 | `reason_details` | The same reasons with `code`, `text_en`, `text_ar` |
 | `model_version` | Which model produced this result |
 
@@ -202,8 +218,8 @@ Response: `{"results": [ <same response as /anomaly/score>, ... ]}` (same order)
 
 | Status | When | What the backend does |
 |---|---|---|
-| 422 | Invalid body (unknown category, amount ≤ 0, more than 500 batch items) | Bug: log it, save no AI result |
-| 5xx / timeout / connection refused | ML service down or busy | Log a warning, save no AI result, re-score later |
+| 422 | Invalid body (unknown category, amount ≤ 0, more than 500 batch items) | A bug: log it, leave the AI columns empty |
+| 5xx / timeout / connection refused | ML service down or busy | Log a warning, leave the AI columns empty, re-score later |
 
 ## B7. Reason codes
 
@@ -222,175 +238,116 @@ Drafts. Final texts in Step 8; the list may get shorter after Step 6.
 | `possible_split_request` | Several requests in the same category for the same day (possible split to stay under a limit) | عدة طلبات في نفس الفئة لنفس اليوم (احتمال تجزئة الطلب للبقاء تحت الحد المسموح) |
 | `many_requests_same_day` | Unusually many requests by this employee for the same day | عدد طلبات غير معتاد من هذا الموظف لنفس اليوم |
 
+## B8. Where each response field is saved (EXPENSE table)
+
+| ML response | EXPENSE column | Type |
+|---|---|---|
+| `score` | `anomaly_score` | float, nullable |
+| `risk_level` | `risk_level` | string `low` / `medium` / `high`, nullable |
+| `reason_details` | `risk_justification` | JSON (list of `{code, text_en, text_ar}`), nullable |
+| `is_flagged`, `reasons`, `model_version`, `expense_id` | not stored | `is_flagged` = risk is medium or high; `reasons` is the same as `reason_details[].text_en` |
+
+All three columns are **null until the request has been scored**.
+
 ---
 
-# Part C — Backend integration (paste-ready)
+# Part C — Backend integration
 
-`httpx` is already in `api/requirements.txt`. Nothing new to install.
+The backend's code isn't on `backend/expense` yet, so this part is written **against the ERD**:
+SQLAlchemy models named `Expense`, `Category`, `User`, `Department`, a `SessionLocal` session factory,
+and a settings object with `ai_service_url`. **Rename to match your code** — the logic stays the same.
+ML will align this part with your real code once it's pushed.
 
-## C1. `app/services/ai_client.py`
+The code below was tested against the running stub service on a copy of the ERD tables (SQLite).
+It only needs `httpx` (`pip install httpx`).
 
-**Keep** `RiskLevel`, `ReceiptExtraction` and `SpendForecast` as they are.
-**Replace** `AnomalyScore`, `AIClient`, `StubAIClient`, `HttpAIClient` and `get_ai_client` with the code below,
-and add the new imports at the top of the file.
+## C1. EXPENSE columns the AI needs (the agreed ERD changes)
 
 ```python
-from datetime import date
-from typing import TYPE_CHECKING
+from sqlalchemy import JSON, Float, Index, String
+from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional
 
+class Expense(Base):
+    __tablename__ = "expense"
+    # ... id, requester_id, department_id, category_id, amount, description,
+    #     expense_date, status, reviewed_by, reviewed_at, manager_note,
+    #     receipt_path, warnings, created_at, updated_at ...
+
+    anomaly_score: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True, comment="ML score 0-1, higher = more unusual. Sorting only, never shown.")
+    risk_level: Mapped[Optional[str]] = mapped_column(
+        String(10), nullable=True, index=True, comment="low / medium / high from the ML service. Null = not scored yet.")
+    risk_justification: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True, comment="ML reasons: list of {code, text_en, text_ar}.")
+
+    __table_args__ = (Index("ix_expense_requester_date", "requester_id", "expense_date"),)
+```
+
+Also from the agreed changes: `reviewed_at`, `manager_note`, `receipt_path` nullable; `users.role` (enum
+`employee` / `manager` / `finance_admin`); the 6 category names seeded exactly.
+
+## C2. Calling the ML service — `app/services/ai_client.py`
+
+```python
+"""Talks to the ML service. Returns None when AI_SERVICE_URL isn't set."""
 import httpx
 
 from app.core.config import get_settings
 
-if TYPE_CHECKING:
-    from app.models.expense import Expense
+
+def _payload(expense, same_day) -> dict:
+    return {
+        "expense_id": expense.id,
+        "requester_id": expense.requester_id,
+        "department_id": expense.department_id,
+        "category": expense.category.name,
+        "amount": str(expense.amount),
+        "expense_date": expense.expense_date.isoformat(),
+        "same_day_requests": [
+            {"expense_id": e.id, "category": e.category.name, "amount": str(e.amount)}
+            for e in same_day
+        ],
+    }
 
 
-class ReasonDetail(BaseModel):
-    """One reason, in both languages."""
-
-    code: str = Field(description="Stable reason code, e.g. possible_split_request.")
-    text_en: str = Field(description="English text.")
-    text_ar: str = Field(description="Arabic text.")
-
-
-class AnomalyScore(BaseModel):
-    """How unusual an expense looks. Same shape as the ML service's response."""
-
-    expense_id: int | None = Field(default=None, description="Expense that was scored.")
-    risk_level: RiskLevel = Field(description="Low, medium or high.")
-    score: float = Field(ge=0, le=1, description="Raw anomaly score, 0-1. For sorting only, never shown to users.")
-    is_flagged: bool = Field(default=False, description="True when risk_level is medium or high.")
-    reasons: list[str] = Field(default_factory=list, description="English reason texts.")
-    reason_details: list[ReasonDetail] = Field(default_factory=list, description="Reasons with code + English + Arabic.")
-    model_version: str = Field(default="", description="Model that produced this result.")
-
-
-class AIClient(ABC):
-    """Contract every AI backend (stub or real) must follow."""
-
-    @abstractmethod
-    def extract_receipt(self, file_path: str) -> ReceiptExtraction:
-        """Read amount / date / merchant from a receipt image."""
-
-    @abstractmethod
-    def score_anomaly(self, expense: "Expense", same_day: list["Expense"]) -> AnomalyScore:
-        """Score one expense. `same_day` = the requester's OTHER requests with the same expense_date."""
-
-    def score_anomaly_batch(self, pairs: list[tuple["Expense", list["Expense"]]]) -> list[AnomalyScore]:
-        """Score many expenses. Default: one call each. HttpAIClient overrides it with one request."""
-        return [self.score_anomaly(expense, same_day) for expense, same_day in pairs]
-
-    @abstractmethod
-    def forecast(self, department_id: int | None) -> SpendForecast:
-        """Forecast next month's spending."""
-
-
-class StubAIClient(AIClient):
-    """Used when AI_SERVICE_URL is empty. Neutral, clearly fake results."""
-
-    def extract_receipt(self, file_path: str) -> ReceiptExtraction:
-        raise NotImplementedError
-
-    def score_anomaly(self, expense: "Expense", same_day: list["Expense"]) -> AnomalyScore:
-        return AnomalyScore(expense_id=expense.id, risk_level=RiskLevel.LOW, score=0.0, model_version="none")
-
-    def forecast(self, department_id: int | None) -> SpendForecast:
-        raise NotImplementedError
-
-
-class HttpAIClient(AIClient):
-    """Calls the ML service (base URL = AI_SERVICE_URL)."""
-
-    def __init__(self, base_url: str) -> None:
-        self.base_url = base_url.rstrip("/")
-
-    @staticmethod
-    def _payload(expense: "Expense", same_day: list["Expense"]) -> dict:
-        return {
-            "expense_id": expense.id,
-            "requester_id": expense.requester_id,
-            "department_id": expense.department_id,
-            "category": expense.category.name,
-            "amount": str(expense.amount),
-            "expense_date": expense.expense_date.isoformat(),
-            "same_day_requests": [
-                {"expense_id": e.id, "category": e.category.name, "amount": str(e.amount)}
-                for e in same_day
-            ],
-        }
-
-    def score_anomaly(self, expense: "Expense", same_day: list["Expense"]) -> AnomalyScore:
-        r = httpx.post(f"{self.base_url}/anomaly/score", json=self._payload(expense, same_day), timeout=3.0)
-        r.raise_for_status()
-        return AnomalyScore.model_validate(r.json())
-
-    def score_anomaly_batch(self, pairs: list[tuple["Expense", list["Expense"]]]) -> list[AnomalyScore]:
-        body = {"items": [self._payload(expense, same_day) for expense, same_day in pairs]}
-        r = httpx.post(f"{self.base_url}/anomaly/score-batch", json=body, timeout=30.0)
-        r.raise_for_status()
-        return [AnomalyScore.model_validate(x) for x in r.json()["results"]]
-
-    def extract_receipt(self, file_path: str) -> ReceiptExtraction:
-        raise NotImplementedError  # not provided by the anomaly service (see F3)
-
-    def forecast(self, department_id: int | None) -> SpendForecast:
-        raise NotImplementedError  # not provided by the anomaly service (see F3)
-
-
-def get_ai_client() -> AIClient:
-    """HttpAIClient when AI_SERVICE_URL is configured, otherwise StubAIClient."""
+def score_one(expense, same_day) -> dict | None:
     url = get_settings().ai_service_url
-    return HttpAIClient(url) if url else StubAIClient()
+    if not url:
+        return None
+    r = httpx.post(f"{url.rstrip('/')}/anomaly/score", json=_payload(expense, same_day), timeout=3.0)
+    r.raise_for_status()
+    return r.json()
+
+
+def score_many(pairs) -> list[dict] | None:
+    """pairs = [(expense, same_day), ...], at most 500."""
+    url = get_settings().ai_service_url
+    if not url:
+        return None
+    body = {"items": [_payload(e, s) for e, s in pairs]}
+    r = httpx.post(f"{url.rstrip('/')}/anomaly/score-batch", json=body, timeout=30.0)
+    r.raise_for_status()
+    return r.json()["results"]
 ```
 
-## C2. `app/models/expense.py` — three columns next to `ai_analysis`
-
-`ai_analysis` keeps the full JSON. These columns make filtering, sorting and the dashboard
-simple SQL instead of JSON queries.
-
-Add to the imports at the top:
-
-```python
-from datetime import datetime
-from sqlalchemy import DateTime, Float
-```
-
-Add inside `class Expense`, under `ai_analysis`:
-
-```python
-    ai_risk_level: Mapped[Optional[str]] = mapped_column(
-        String(10), nullable=True, index=True, comment="low / medium / high from the ML service. Null = not scored yet."
-    )
-    ai_score: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True, comment="0-1 anomaly score, for sorting. Never shown to users."
-    )
-    ai_scored_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, comment="When it was last scored.")
-```
-
-Then: `alembic revision --autogenerate -m "add ai columns"` and `alembic upgrade head`.
-
-## C3. New file `app/services/anomaly_service.py`
+## C3. Scoring and saving — `app/services/anomaly_service.py`
 
 ```python
 """Runs anomaly scoring and stores the result on the expense. Never raises into the workflow."""
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.core.constants import ExpenseStatus
 from app.core.database import SessionLocal
 from app.models.expense import Expense
-from app.services.ai_client import AnomalyScore, get_ai_client
+from app.services import ai_client
 
 log = logging.getLogger(__name__)
 
-PENDING_STATUSES = {ExpenseStatus.PENDING_MANAGER, ExpenseStatus.PENDING_FINANCE, ExpenseStatus.NEEDS_CHANGES}
-
 
 def same_day_requests(db: Session, expense: Expense) -> list[Expense]:
-    """The requester's OTHER requests with the same expense_date, any status."""
+    """The employee's OTHER requests with the same expense_date, any status."""
     return (
         db.query(Expense)
         .filter(
@@ -402,17 +359,16 @@ def same_day_requests(db: Session, expense: Expense) -> list[Expense]:
     )
 
 
-def save_result(expense: Expense, result: AnomalyScore) -> None:
-    expense.ai_analysis = result.model_dump(mode="json")
-    expense.ai_risk_level = result.risk_level.value
-    expense.ai_score = result.score
-    expense.ai_scored_at = datetime.now(timezone.utc).replace(tzinfo=None)
+def save_result(expense: Expense, result: dict) -> None:
+    expense.anomaly_score = result["score"]
+    expense.risk_level = result["risk_level"]
+    expense.risk_justification = result["reason_details"]
 
 
 def score_expense_in_background(expense_id: int) -> None:
     """Run as a FastAPI BackgroundTask AFTER the expense is committed.
 
-    Also re-scores the requester's other pending requests for the same day: when a third
+    Also re-scores the employee's other Pending requests for the same day: when a third
     split request arrives, the first two become suspicious too.
     """
     db = SessionLocal()
@@ -420,13 +376,15 @@ def score_expense_in_background(expense_id: int) -> None:
         expense = db.get(Expense, expense_id)
         if expense is None:
             return
-        client = get_ai_client()
         siblings = same_day_requests(db, expense)
-        save_result(expense, client.score_anomaly(expense, siblings))
+        result = ai_client.score_one(expense, siblings)
+        if result is None:          # AI_SERVICE_URL not set
+            return
+        save_result(expense, result)
         for other in siblings:
-            if other.status in PENDING_STATUSES:
+            if other.status == "Pending":
                 others_same_day = [e for e in siblings if e.id != other.id] + [expense]
-                save_result(other, client.score_anomaly(other, others_same_day))
+                save_result(other, ai_client.score_one(other, others_same_day))
         db.commit()
     except Exception as exc:  # ML down, timeout, bad response: never break the workflow
         db.rollback()
@@ -435,38 +393,55 @@ def score_expense_in_background(expense_id: int) -> None:
         db.close()
 ```
 
-## C4. Where to call it — `app/routes/expenses.py`
-
-Add `BackgroundTasks` to the three routes that create or change a request:
+## C4. Where to call it — the expense routes
 
 ```python
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 from app.services.anomaly_service import score_expense_in_background
 
-def create_expense(body: ExpenseCreate, db: DbSession, current_user: CurrentUser, background_tasks: BackgroundTasks):
-    expense = ExpenseService(db).create_expense(current_user, body)
+
+@router.post("/expenses")
+def create_expense(body: ExpenseCreate, background_tasks: BackgroundTasks,
+                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if user.role == "manager":
+        raise HTTPException(403, "Department managers can't submit expense requests.")
+    expense = ...                      # save with status="Pending" + rule warnings (C5), commit
     background_tasks.add_task(score_expense_in_background, expense.id)
     return expense
 
-def update_expense(expense_id: ExpenseId, body: ExpenseUpdate, db: DbSession, current_user: CurrentUser,
-                   background_tasks: BackgroundTasks):
-    expense = ExpenseService(db).update_expense(current_user, expense_id, body)
-    background_tasks.add_task(score_expense_in_background, expense.id)
-    return expense
 
-def resubmit_expense(expense_id: ExpenseId, db: DbSession, current_user: CurrentUser, background_tasks: BackgroundTasks):
-    expense = ExpenseWorkflowService(db).resubmit(current_user, expense_id)
+@router.put("/expenses/{expense_id}")
+def update_expense(expense_id: int, body: ExpenseUpdate, background_tasks: BackgroundTasks,
+                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    expense = ...                      # only the requester, only while status == "Pending"; commit
     background_tasks.add_task(score_expense_in_background, expense.id)
     return expense
 ```
 
-Background tasks run after the response is sent, so the employee never waits for the model.
-They use their own session (`SessionLocal()`), because the request's session is closed by then.
+- Background tasks run **after the response is sent**, so the employee never waits for the model.
+- They open their own session (`SessionLocal()`), because the request's session is closed by then.
+- No scoring is needed when the manager approves or rejects: the request itself didn't change.
 
-## C5. Re-scoring — new file `app/rescore_ai.py`
+## C5. Rule warnings (`backend/finance`) — keep them separate
 
-For requests that were saved while the ML service was down, for the seed history, and after a
-new model version.
+`finance_service.limit_warning` and `budget_warning` already return a text or `None`.
+Store them in `expense.warnings` as a list of strings, e.g.:
+
+```python
+warnings = [w for w in (
+    limit_warning(body.amount, limit.max_amount if limit else None),
+    budget_warning(spent_this_month, body.amount, budget.amount if budget else None),
+) if w]
+expense.warnings = warnings or None
+```
+
+- `warnings` = **rules**. `risk_justification` = **AI**. Never mix them: the frontend shows them as two sections.
+- Optional extra rule (catches split requests by rule): *the total of this employee's same-category
+  requests for the same day is over the category limit.* It uses the same query as C3.
+
+## C6. Re-scoring — `app/rescore_ai.py`
+
+For requests saved while the ML service was down, for the seed history, and after a new model version.
 
 ```python
 """Score expenses with the ML service.
@@ -479,7 +454,7 @@ from collections import defaultdict
 
 from app.core.database import SessionLocal
 from app.models.expense import Expense
-from app.services.ai_client import get_ai_client
+from app.services import ai_client
 from app.services.anomaly_service import save_result
 
 BATCH_SIZE = 500
@@ -493,12 +468,15 @@ def run(rescore_all: bool) -> None:
         for e in everything:
             by_day[(e.requester_id, e.expense_date)].append(e)
 
-        targets = everything if rescore_all else [e for e in everything if e.ai_risk_level is None]
-        client = get_ai_client()
+        targets = everything if rescore_all else [e for e in everything if e.risk_level is None]
         for start in range(0, len(targets), BATCH_SIZE):
             chunk = targets[start:start + BATCH_SIZE]
             pairs = [(e, [o for o in by_day[(e.requester_id, e.expense_date)] if o.id != e.id]) for e in chunk]
-            for expense, result in zip(chunk, client.score_anomaly_batch(pairs)):
+            results = ai_client.score_many(pairs)
+            if results is None:
+                print("AI_SERVICE_URL is not set.")
+                return
+            for expense, result in zip(chunk, results):
                 save_result(expense, result)
             db.commit()
             print(f"Scored {start + len(chunk)}/{len(targets)}")
@@ -510,114 +488,91 @@ if __name__ == "__main__":
     run(rescore_all="--all" in sys.argv)
 ```
 
-## C6. Showing it to the right people — `app/schemas/expense.py`
+## C7. What the API returns to each role
+
+Add the AI fields to the expense response **only for the manager of the request's department**.
+**Never return `anomaly_score`.**
 
 ```python
 from typing import Literal
-from app.services.ai_client import ReasonDetail
+from pydantic import BaseModel, Field
 
 
-class AnomalyView(BaseModel):
-    """What approvers see. The raw score is never included."""
+class ReasonDetail(BaseModel):
+    code: str = Field(description="Stable reason code, e.g. possible_split_request.")
+    text_en: str = Field(description="English text.")
+    text_ar: str = Field(description="Arabic text.")
 
+
+class ExpenseAIView(BaseModel):
+    """What the department manager sees. The raw score is never included."""
     risk_level: Literal["low", "medium", "high"] = Field(description="Badge to show.")
-    is_flagged: bool = Field(description="True when medium or high.")
-    reasons: list[str] = Field(description="English reason texts, most important first.")
-    reason_details: list[ReasonDetail] = Field(description="Reasons with code + English + Arabic.")
-    model_version: str = Field(description="Model that produced this result.")
-```
-
-Add to `ExpenseRead`:
-
-```python
-    ai: AnomalyView | None = Field(
-        default=None,
-        description="AI risk check. Null for the requester, for users without approver/department/company scope, "
-                    "and when the request hasn't been scored yet.",
-    )
-```
-
-Fill it when building the response (`ai` isn't a column, so set it after `model_validate`):
-
-```python
-from app.core.constants import (PERM_APPROVE_FINANCE_STEP, PERM_APPROVE_MANAGER_STEP,
-                                PERM_EXPENSES_VIEW_ALL, PERM_EXPENSES_VIEW_DEPARTMENT)
-from app.services.rbac_service import RbacService
-
-AI_VIEW_PERMISSIONS = [PERM_APPROVE_MANAGER_STEP, PERM_APPROVE_FINANCE_STEP,
-                       PERM_EXPENSES_VIEW_DEPARTMENT, PERM_EXPENSES_VIEW_ALL]
+    reasons: list[ReasonDetail] = Field(description="AI reasons, most important first (0-3).")
 
 
-def ai_view_for(db, user, expense) -> AnomalyView | None:
-    if expense.ai_analysis is None or user.id == expense.requester_id:
-        return None
-    if user.is_superuser or RbacService(db).user_has_any_permission(user, AI_VIEW_PERMISSIONS):
-        return AnomalyView.model_validate(expense.ai_analysis)
+def ai_view_for(user, expense, department) -> ExpenseAIView | None:
+    """department = the Department row of expense.department_id."""
+    if expense.risk_level is None:
+        return None                                   # not scored yet
+    if user.id == expense.requester_id:
+        return None                                   # never on your own request
+    if user.role == "manager" and department is not None and department.manager_id == user.id:
+        return ExpenseAIView(risk_level=expense.risk_level,
+                             reasons=expense.risk_justification or [])
     return None
-
-
-def to_expense_read(db, user, expense) -> ExpenseRead:
-    read = ExpenseRead.model_validate(expense)
-    read.ai = ai_view_for(db, user, expense)
-    return read
 ```
 
-Use `to_expense_read` in every route that returns `ExpenseRead` (list, get, create, update,
-resubmit, pending approvals).
+In the expense response schema add `ai: ExpenseAIView | None = None` and keep `warnings` as its own field.
+Employees always get `ai = null`.
 
-## C7. Filtering and sorting
-
-`GET /expenses` — add a filter:
-
-```python
-risk_level: Annotated[Literal["low", "medium", "high"] | None,
-                      Query(description="Only requests with this AI risk level.")] = None
-# in the query:  if risk_level: q = q.filter(Expense.ai_risk_level == risk_level)
-```
-
-`GET /approvals/pending` — **riskiest first**, then oldest first:
+## C8. The manager's Pending queue — riskiest first
 
 ```python
 from sqlalchemy import case
 
-risk_order = case({"high": 0, "medium": 1, "low": 2}, value=Expense.ai_risk_level, else_=3)
-q = q.order_by(risk_order, Expense.created_at)
+risk_order = case({"high": 0, "medium": 1, "low": 2}, value=Expense.risk_level, else_=3)
+
+q = (db.query(Expense)
+       .filter(Expense.department_id == my_department.id, Expense.status == "Pending")
+       .order_by(risk_order, Expense.created_at))
+# optional filter: ?risk_level=high  →  q = q.filter(Expense.risk_level == risk_level)
 ```
 
-## C8. Dashboards — `app/schemas/dashboard.py`
+Order: high → medium → low → not scored yet, then oldest first.
+
+## C9. Finance dashboard — AI summary
 
 ```python
 class RiskCounts(BaseModel):
-    high: int = Field(description="Requests with AI risk high.")
-    medium: int = Field(description="Requests with AI risk medium.")
-    low: int = Field(description="Requests with AI risk low.")
-    not_scored: int = Field(description="Requests with no AI result yet.")
+    high: int
+    medium: int
+    low: int
+    not_scored: int
 
 
 class DepartmentRisk(BaseModel):
-    department_id: int = Field(description="Department id.")
-    department_name: str = Field(description="Department name.")
+    department_id: int
+    department_name: str
     flagged: int = Field(description="Requests with risk medium or high.")
     total: int = Field(description="All scored requests.")
     flagged_percent: float = Field(description="flagged / total x 100.")
 
 
 class ReasonCount(BaseModel):
-    code: str = Field(description="Reason code.")
-    text_en: str = Field(description="English text.")
-    text_ar: str = Field(description="Arabic text.")
+    code: str
+    text_en: str
+    text_ar: str
     count: int = Field(description="How many flagged requests have this reason.")
 
 
 class AnomalySummary(BaseModel):
-    counts: RiskCounts = Field(description="Requests by AI risk level.")
-    by_department: list[DepartmentRisk] = Field(description="Flagged share per department, highest first.")
-    top_reasons: list[ReasonCount] = Field(description="Most common reasons among flagged requests (top 5).")
+    counts: RiskCounts
+    by_department: list[DepartmentRisk] = Field(description="Highest flagged_percent first.")
+    top_reasons: list[ReasonCount] = Field(description="Top 5 among flagged requests.")
 ```
 
-Add `anomalies: AnomalySummary` to `FinanceDashboard`, and
-`flagged_awaiting_my_approval: int` to `ManagerDashboard`.
-`top_reasons` is computed by counting `ai_analysis["reason_details"][*]["code"]` over flagged requests.
+`top_reasons` = count `risk_justification[*].code` over requests with `risk_level` in (`medium`, `high`).
+Same period filter as the rest of the finance dashboard (e.g. this month).
 
 ---
 
@@ -625,12 +580,15 @@ Add `anomalies: AnomalySummary` to `FinanceDashboard`, and
 
 ## D1. Where the data comes from
 
-From the backend only: the **`ai`** field on every expense (`ExpenseRead.ai`) and
-`anomalies` on the finance dashboard. **Never call the ML service directly.**
+From the backend only. On each expense:
 
-`ai` is `null` when the viewer is the requester, has no approver/department/company scope, or the
-request hasn't been scored yet. Treat `null` as "show nothing" for employees; for approvers,
-show the "Not analyzed" state.
+| Field | What it is | When it's null |
+|---|---|---|
+| `ai.risk_level` | `low` / `medium` / `high` | Viewer isn't the department manager, or not scored yet |
+| `ai.reasons` | List of `{code, text_en, text_ar}` | Same |
+| `warnings` | List of rule texts (over limit, over budget) | No rule was broken |
+
+**Never call the ML service directly, and never show `anomaly_score`** (the backend doesn't send it).
 
 ## D2. Risk badge
 
@@ -638,161 +596,256 @@ show the "Not analyzed" state.
 |---|---|---|---|
 | `high` | High risk | خطر مرتفع | Red |
 | `medium` | Medium risk | خطر متوسط | Amber |
-| `low` | Low risk | خطر منخفض | Green (or a subtle grey) |
-| `ai` is `null` (approver view) | Not analyzed | لم يُحلَّل | Grey |
+| `low` | Low risk | خطر منخفض | Green (or subtle grey) |
+| `ai` is `null` (manager view) | Not analyzed yet | لم يُحلَّل بعد | Grey |
 
-Don't rely on color alone: always show the text label too.
+- Always show the text label, not only the color.
+- **No percentage, no score.** "Anomaly score: 87%" reads like "87% chance of fraud", which is wrong:
+  the score only ranks requests from most to least unusual.
 
-## D3. Reasons
+## D3. Two sections: AI risk check vs policy warnings
 
-- Show `ai.reason_details`, in order (most important first), max 3.
-- Arabic UI → `text_ar`; English UI → `text_en`.
-- If `reason_details` is empty but `reasons` isn't, show `reasons` (English).
-- `low` has no reasons: show only the badge.
+On the manager's request detail, show **two separate sections**:
 
-## D4. Screens
+1. **AI risk check** — the badge (D2) + `ai.reasons` (`text_ar` in the Arabic UI, `text_en` in the English UI), max 3, in order.
+   `low` has no reasons: show only the badge.
+2. **Policy warnings** — `warnings` (e.g. "Amount 3,500 SAR is above the 3,000 SAR limit for this category").
 
-| Screen | Endpoint | What to add |
+They answer different questions ("is this normal for this person?" vs "is this allowed?"), so they must not be merged into one list.
+
+## D4. Screens per role
+
+| Role | Screen | What to show |
 |---|---|---|
-| Pending approvals (manager + finance) | `GET /approvals/pending` | Risk badge on each row. Already sorted riskiest first. Optional filter chips: All / High / Medium |
-| Expense detail (approver view) | `GET /expenses/{id}` | An "AI risk check" panel: badge, reasons, and the note in D5 |
-| Expenses list (department / company view) | `GET /expenses?risk_level=high` | Risk badge column + risk filter |
-| Manager dashboard | `ManagerDashboard.flagged_awaiting_my_approval` | One number: flagged requests waiting for you |
-| Finance dashboard | `FinanceDashboard.anomalies` | Requests by risk (bar), flagged % per department (bar), top reasons (list) |
-| Employee screens | — | **Nothing.** No badge, no reasons, no score |
+| `employee` | My requests, submit / edit request | Status only. **No badge, no reasons, no score** |
+| `manager` | Pending queue (their department) | Risk badge on each row. Already sorted riskiest first. Optional filter chips: All / High / Medium |
+| `manager` | Request detail | D3: AI risk check + policy warnings, then Approve / Reject (with `manager_note`) |
+| `finance_admin` | Dashboard | Requests by risk (bar), flagged % per department (bar), top reasons (list) — next to budgets |
+| `finance_admin` | Budgets, limits | No AI |
 
-## D5. Fixed texts
+## D5. Categories and statuses (must match the backend)
+
+Categories — exact names, with Arabic labels:
+
+| `name` | `name_ar` |
+|---|---|
+| Food | طعام وضيافة |
+| Travel | سفر |
+| Transportation | مواصلات |
+| Office Supplies | مستلزمات مكتبية |
+| IT & Telecom | تقنية المعلومات والاتصالات |
+| Equipment & Maintenance | معدات وصيانة |
+
+Statuses (new ERD, **one approval step** by the department manager):
+
+| `status` | English | Arabic |
+|---|---|---|
+| `Pending` | Pending | قيد المراجعة |
+| `Approved` | Approved | مقبول |
+| `Rejected` | Rejected | مرفوض |
+
+There is no `pending_finance` and no `needs_changes` anymore.
+
+## D6. Fixed texts
 
 | Where | English | Arabic |
 |---|---|---|
-| Panel title | AI risk check | فحص المخاطر بالذكاء الاصطناعي |
-| Note under the reasons | This is an automatic hint to help your review. It is not a decision. | هذا تنبيه آلي للمساعدة في المراجعة، وليس قراراً. |
+| AI section title | AI risk check | فحص المخاطر بالذكاء الاصطناعي |
+| Under the AI reasons | This is an automatic hint to help your review. It is not a decision. | هذا تنبيه آلي للمساعدة في المراجعة، وليس قراراً. |
+| Rules section title | Policy warnings | تنبيهات السياسة |
 | Not analyzed | Not analyzed yet | لم يُحلَّل بعد |
 | Dashboard section title | Unusual requests | الطلبات غير المعتادة |
 
-## D6. Mock data (the `ai` field)
+## D7. Mock data
 
-High:
-
-```json
-{
-  "risk_level": "high",
-  "is_flagged": true,
-  "reasons": [
-    "Several requests in the same category for the same day (possible split to stay under a limit)",
-    "Amount is much higher than this employee usually requests in this category"
-  ],
-  "reason_details": [
-    {"code": "possible_split_request",
-     "text_en": "Several requests in the same category for the same day (possible split to stay under a limit)",
-     "text_ar": "عدة طلبات في نفس الفئة لنفس اليوم (احتمال تجزئة الطلب للبقاء تحت الحد المسموح)"},
-    {"code": "amount_high_for_employee_category",
-     "text_en": "Amount is much higher than this employee usually requests in this category",
-     "text_ar": "المبلغ أعلى بكثير مما يطلبه هذا الموظف عادةً في هذه الفئة"}
-  ],
-  "model_version": "stub-0.2"
-}
-```
-
-Medium:
+High (with a rule warning too):
 
 ```json
 {
-  "risk_level": "medium",
-  "is_flagged": true,
-  "reasons": ["Expense date falls on a weekend (Friday–Saturday)"],
-  "reason_details": [
-    {"code": "weekend_expense",
-     "text_en": "Expense date falls on a weekend (Friday–Saturday)",
-     "text_ar": "تاريخ المصروف في عطلة نهاية الأسبوع (الجمعة–السبت)"}
-  ],
-  "model_version": "stub-0.2"
+  "id": 347901,
+  "category": {"id": 4, "name": "Office Supplies"},
+  "amount": "2500.00",
+  "status": "Pending",
+  "warnings": [],
+  "ai": {
+    "risk_level": "high",
+    "reasons": [
+      {"code": "possible_split_request",
+       "text_en": "Several requests in the same category for the same day (possible split to stay under a limit)",
+       "text_ar": "عدة طلبات في نفس الفئة لنفس اليوم (احتمال تجزئة الطلب للبقاء تحت الحد المسموح)"},
+      {"code": "amount_high_for_employee_category",
+       "text_en": "Amount is much higher than this employee usually requests in this category",
+       "text_ar": "المبلغ أعلى بكثير مما يطلبه هذا الموظف عادةً في هذه الفئة"}
+    ]
+  }
 }
 ```
 
-Low:
+Medium, over the limit:
 
 ```json
-{"risk_level": "low", "is_flagged": false, "reasons": [], "reason_details": [], "model_version": "stub-0.2"}
+{
+  "id": 347902,
+  "category": {"id": 4, "name": "Office Supplies"},
+  "amount": "3500.00",
+  "status": "Pending",
+  "warnings": ["Amount 3500.00 SAR is above the 3000.00 SAR limit for this category."],
+  "ai": {
+    "risk_level": "medium",
+    "reasons": [
+      {"code": "weekend_expense",
+       "text_en": "Expense date falls on a weekend (Friday–Saturday)",
+       "text_ar": "تاريخ المصروف في عطلة نهاية الأسبوع (الجمعة–السبت)"}
+    ]
+  }
+}
 ```
 
-Not analyzed / hidden: `null`
+Low: `"ai": {"risk_level": "low", "reasons": []}` · Not analyzed / employee view: `"ai": null`
+
+For realistic requests to design with, use `ml/docs/samples/sample_requests.csv` (50 rows, from the demo data).
 
 ---
 
-# Part E — Seed data (backend, files from ML in Step 4)
+# Part E — Seed data (backend; files from ML)
 
-## E1. Files
+## E1. Status
 
-ML delivers three CSV files (UTF-8). **The format is fixed now** so the seed script can be written in parallel.
+The ERD is final (OK'd 18 Nov), so the format below is fixed. **ML exports the files when the team says
+go** — after deciding how much history goes in (E7). Don't import the Step 4 training files
+(`requests.csv`, `users.csv`, `departments.csv`): they have extra ML-only columns.
+
+## E2. Files and columns
+
+All CSV, UTF-8. **Every `id` must be kept** (E4).
+
+`categories.csv`
+
+| Column | Example |
+|---|---|
+| `id` | 4 |
+| `name` | Office Supplies |
+
+Ids: 1 Food · 2 Travel · 3 Transportation · 4 Office Supplies · 5 IT & Telecom · 6 Equipment & Maintenance.
 
 `departments.csv`
 
 | Column | Example | Notes |
 |---|---|---|
-| `id` | 7 | Keep it |
-| `name` | IT | Unique |
-| `description` | Information technology | |
-| `manager_id` | 412 | A `users.id` from users.csv |
+| `id` | 1 | |
+| `name` | Operations | Unique |
+| `manager_id` | 101 | A `users.id` |
 
 `users.csv`
 
 | Column | Example | Notes |
 |---|---|---|
-| `id` | 412 | Keep it |
-| `username` | fahad.alharbi | Unique |
-| `email` | fahad.alharbi@example.com | Unique |
-| `full_name` | Fahad Al-Harbi | Arabic name in English letters |
-| `department_id` | 7 | |
-| `manager_id` | 398 | Empty for department managers |
-| `group` | Employee | `Employee`, `Manager` or `Finance` — must match the seeded group names |
+| `id` | 2259 | |
+| `username` | yazeed.almuqrin.2259 | Unique |
+| `email` | yazeed.almuqrin.2259@example.com | Unique; `example.com` can't reach a real person |
+| `full_name` | Yazeed Al-Muqrin | Arabic name in English letters |
+| `role` | employee | `employee`, `manager` or `finance_admin` |
+| `department_id` | 1 | Empty for finance admins |
+| `is_active` | true | |
+
+No password in the file: the seed script sets one demo password (E4).
+
+`expense_limits.csv`
+
+| Column | Example |
+|---|---|
+| `id` | 4 |
+| `category_id` | 4 |
+| `max_amount` | 3000.00 |
+
+`budget.csv`
+
+| Column | Example |
+|---|---|
+| `id` | 1 |
+| `department_id` | 1 |
+| `year` | 2026 |
+| `month` | 6 |
+| `amount` | 6200000.00 |
 
 `expenses.csv` (history)
 
 | Column | Example | Notes |
 |---|---|---|
-| `id` | 100231 | Keep it |
-| `requester_id` | 412 | |
-| `department_id` | 7 | |
-| `category` | Office Supplies | Category **name**; look up `categories.id` |
-| `amount` | 450.00 | SAR |
-| `currency` | SAR | |
-| `description` | Office supplies purchase | Generated text |
-| `expense_date` | 2025-08-14 | |
-| `status` | approved | History is already decided |
-| `created_at` | 2025-08-14 09:00:00 | |
+| `id` | 346990 | |
+| `requester_id` | 2259 | |
+| `department_id` | 1 | |
+| `category_id` | 5 | |
+| `amount` | 251.25 | SAR |
+| `description` | Computer accessories | Generated |
+| `expense_date` | 2026-06-25 | |
+| `status` | Approved | History is already decided |
+| `reviewed_by` | 101 | The department's manager |
+| `reviewed_at` | 2026-06-26 10:30:00 | |
+| `manager_note` | *(empty)* | |
+| `receipt_path` | *(empty)* | |
+| `warnings` | *(empty)* | |
+| `created_at` | 2026-06-25 16:02:00 | |
+| `updated_at` | 2026-06-26 10:30:00 | |
 
-## E2. Import rules
+`anomaly_score`, `risk_level`, `risk_justification` are left **empty**: run `python -m app.rescore_ai`
+after the import (E4).
+
+## E3. ID ranges
+
+Please don't use these in your own test data.
+
+| Range | Who / what |
+|---|---|
+| 1–6 | Categories |
+| 1–20 | Departments |
+| 101–120 | Department managers (no requests — managers don't submit) |
+| 201–202 | Finance admins |
+| 1001–5577 | Employees |
+| 100001–347838 | Expenses (history) |
+| 347839 and up | New requests created in the demo |
+
+## E4. Import rules
 
 1. **Keep the ids from the files.** The model remembers employees and departments by id: if
-   AUTO_INCREMENT assigns new ones, employee 412 in the database is a different person than
-   employee 412 in the model. (Inserting explicit ids is fine in MariaDB; the counter moves past them.)
-2. Order: run the normal seed (permissions, admin, categories, settings, groups) →
-   departments **without** `manager_id` → users → set `departments.manager_id` → expenses.
-3. **One demo password for all seeded users** (e.g. `DEMO_USER_PASSWORD` in `.env`): hash it
-   **once** and reuse the hash. Hashing thousands of passwords one by one with Argon2 is slow.
-4. Historical expenses have no `Approval` rows. That's fine for the prototype.
-5. Afterwards run `python -m app.rescore_ai` so the history has AI results for the dashboards.
-6. Make the seed idempotent like the existing one: skip rows whose id already exists.
+   AUTO_INCREMENT assigns new ones, employee 2259 in the database is a different person than employee
+   2259 in the model. (Inserting explicit ids is fine in MySQL; the counter moves past them.)
+2. Order: `categories` → `departments` **without** `manager_id` → `users` → set `departments.manager_id`
+   → `expense_limits` → `budget` → `expenses`.
+3. **One demo password for all seeded users** (e.g. `DEMO_USER_PASSWORD` in `.env`): hash it **once** and
+   reuse the hash. Hashing thousands of passwords one by one is slow.
+4. Make the seed idempotent: skip rows whose id already exists.
+5. Afterwards run `python -m app.rescore_ai` so the history has AI results for the dashboard.
 
-## E3. Policies (suggestion, final numbers in Step 4)
+## E5. Category limits (`expense_limits`)
 
-A maximum per request makes the split-detection demo clear (an employee needs 5,000 SAR of
-supplies and submits three requests under 2,000). Suggested starting values, to be checked against
-the data in Step 4:
+| Category | `max_amount` (SAR) | Demo requests over it |
+|---|---|---|
+| Food | 2,000 | 4.1% |
+| Travel | 10,000 | 0.8% |
+| Transportation | 5,000 | 5.3% |
+| Office Supplies | 3,000 | 4.8% |
+| IT & Telecom | 7,500 | 4.7% |
+| Equipment & Maintenance | 7,500 | 5.1% |
 
-| Category | `max_amount` (SAR) |
-|---|---|
-| Office Supplies | 2,000 |
-| IT & Telecom | 5,000 |
-| Equipment & Maintenance | 5,000 |
-| Food | 1,000 |
-| Transportation | 1,500 |
-| Travel | 10,000 |
+Set near the 95th percentile of real amounts, so ~5% of requests go over — rare enough that a warning
+means something. **A limit applies to one request at a time** (not a daily or monthly total).
+
+## E6. Budget (proposal — team decides)
+
+The demo data has no budgets. Proposal: for each department and month, **the department's average
+monthly spending × 1.1**, so most months stay under budget and a few go over. ML generates `budget.csv`
+from the data once the team agrees (or uses numbers the team gives).
+
+## E7. How much history
+
+**Recommendation:** a few departments and the last ~6 months. The dashboard still looks full and the
+import is fast. The model doesn't need the history in MySQL — it keeps its own statistics.
+Team decides; ML exports exactly that.
 
 ---
 
-# Part F — Testing, changes, open questions
+# Part F — Testing, changes, mentor feedback, open questions
 
 ## F1. Testing with the stub
 
@@ -802,26 +855,45 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 - **`amount` over 10,000** → always `high` with `large_amount`.
 - **2 or more same-category requests in `same_day_requests`** → always `high` with `possible_split_request`.
 - A category outside the 6 → **422** (name mismatches show up on the first test).
-- To test "Not analyzed": stop the ML service, submit a request, check `ai` is `null`, start it again,
-  run `python -m app.rescore_ai`.
+- To test "Not analyzed yet": stop the ML service, submit a request, check the AI columns are empty,
+  start it again, run `python -m app.rescore_ai`.
 
 ## F2. What changes when the real model arrives (Step 9)
 
 - Only the inside of `ml/src/predict.py` changes. **Endpoints, request and response stay the same.**
 - `model_version` changes from `stub-0.2`. Run `python -m app.rescore_ai --all` once.
-- Risk cut-offs come from the data (Step 7); reason texts are finalized (Step 8);
-  the list of reason codes may get shorter (Step 6).
+- The Medium / High cut-offs are set from **how many flags managers can review** (mentor feedback MF4).
+- Reason texts are finalized (Step 8); the list of reason codes may get shorter (Step 6).
 
-## F3. Open questions
+## F3. Mentor feedback that touches this contract
 
-| Question | Owner | Status |
+| # | What | Effect here |
 |---|---|---|
-| Who builds receipt reading (`extract_receipt`)? Not part of the anomaly model | Team | Open — mark out of scope if nobody owns it |
-| Does forecasting join this service (`/forecast/...`) or get its own URL? | Forecasting + Backend | Open |
-| `score_anomaly(expense, same_day)` instead of `score_anomaly(expense_id)` | Backend | Proposed in C1 |
-| Which departments go into the demo database | Team | Step 4 |
+| MF1 | Features use only **earlier** requests; written rule for **new employees** | None on the API. A brand-new employee is compared with their department and category until they have history |
+| MF3 | Test on **unseen** planted anomalies; unlabeled data isn't "confirmed normal" | None on the API. Evaluation numbers in Step 8 |
+| MF4 | Risk cut-offs from **review capacity**; compare the model with **simple policy rules** | Cut-offs (F2). The rules in C5 are part of that comparison |
+| MF5 | Optional: receipt reading with a multimodal model, human confirmation, redaction | Not in this service yet (F4) |
 
-## F4. Changing this contract
+## F4. Open questions
 
-Any change (a field, a category name, an endpoint) goes through ML first. ML updates the stub and
-this file, then tells both teams. The version at the top goes up with every change.
+| Question | Who | Status |
+|---|---|---|
+| How many flagged requests can a manager realistically review per week? (MF4, needed in Step 7) | Team | Open |
+| How much history goes into the demo database? (E7) | Team / Backend | Open |
+| Block or warn when a request is over its category limit? Add the same-day total rule? (C5) | Backend + team | Open |
+| Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Open |
+| Who builds receipt reading (`/receipt/...`)? | Team | Open |
+| Does forecasting join this service (`/forecast/...`) or get its own URL? | Forecasting + backend | Open |
+| Align Part C with the real backend code | ML | When the code is on `backend/expense` |
+
+## F5. Changing this contract
+
+Any change (a field, a category name, an endpoint) goes through ML first. ML updates the stub and this
+file, then tells both teams. The version at the top goes up with every change.
+
+| Version | Date | Changes |
+|---|---|---|
+| v0.4 | 18 Nov | Rewritten for the new ERD: one approval step, `role` enum, AI columns `anomaly_score` / `risk_level` / `risk_justification`, rule warnings separate from AI reasons, ERD-based Part C, seed format with `categories`, `expense_limits`, `budget`, Step 4 ID ranges and limits, categories + statuses with Arabic labels, mentor feedback |
+| v0.3 | 15 Nov | Full integration for the `api/` skeleton (reverted the same day) |
+| v0.2 | 15 Nov | HTTP service instead of a Python import; requests instead of card transactions |
+| v0.1 | 14 Nov | First draft (card-transaction design) |
