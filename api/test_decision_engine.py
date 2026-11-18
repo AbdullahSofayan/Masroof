@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from app.services.decision_engine import evaluate_expense
 
 # test 1: expense exceeds both limits
@@ -7,8 +8,7 @@ result = evaluate_expense(
     amount=Decimal("5000"),
     category_limit=Decimal("3000"),
     monthly_spent=Decimal("8000"),
-    monthly_budget=Decimal("10000")
-
+    monthly_budget=Decimal("10000"),
 )
 
 assert len(result["warnings"]) == 2
@@ -20,7 +20,7 @@ result = evaluate_expense(
     amount=Decimal("1000"),
     category_limit=Decimal("3000"),
     monthly_spent=Decimal("8000"),
-    monthly_budget=Decimal("10000")
+    monthly_budget=Decimal("10000"),
 )
 
 assert result["warnings"] == []
@@ -32,7 +32,7 @@ result = evaluate_expense(
     amount=Decimal("5000"),
     category_limit=None,
     monthly_spent=Decimal("0"),
-    monthly_budget=None
+    monthly_budget=None,
 )
 
 assert result["warnings"] == []
@@ -46,10 +46,7 @@ result = evaluate_expense(
     category_limit=Decimal("3000"),
     monthly_spent=Decimal("8000"),
     monthly_budget=Decimal("10000"),
-    anomaly_result={
-        "risk_level": "High",
-        "anomaly_score": -0.15
-    }
+    anomaly_result={"risk_level": "High", "anomaly_score": -0.15},
 )
 
 assert len(result["warnings"]) == 2
@@ -64,7 +61,7 @@ result = evaluate_expense(
     amount=Decimal("1000"),
     category_limit=Decimal("3000"),
     monthly_spent=Decimal("2000"),
-    monthly_budget=Decimal("10000")
+    monthly_budget=Decimal("10000"),
 )
 
 assert result["warnings"] == []

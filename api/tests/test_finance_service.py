@@ -2,25 +2,42 @@
 
 Run from the api folder:  python -m tests.test_finance_service
 """
+
 from decimal import Decimal
 
-from app.services.finance_service import budget_usage, budget_warning, limit_warning
+from app.services.finance_service import (budget_usage, budget_warning,
+                                          limit_warning)
 
 
 def test_limit_warning():
     # Food limit is 500
-    assert limit_warning(Decimal("300"), Decimal("500")) is None       # under the limit
-    assert limit_warning(Decimal("500"), Decimal("500")) is None       # exactly the limit
-    assert limit_warning(Decimal("700"), Decimal("500")) is not None   # over the limit
-    assert limit_warning(Decimal("10000"), None) is None               # category has no limit
+    assert limit_warning(Decimal("300"), Decimal("500")
+                         ) is None  # under the limit
+    assert limit_warning(Decimal("500"), Decimal("500")
+                         ) is None  # exactly the limit
+    assert limit_warning(Decimal("700"), Decimal("500")
+                         ) is not None  # over the limit
+    # category has no limit
+    assert limit_warning(Decimal("10000"), None) is None
 
 
 def test_budget_warning():
     # IT budget for November is 50,000 and 42,500 is already approved
-    assert budget_warning(Decimal("42500"), Decimal("5000"), Decimal("50000")) is None      # 47,500 fits
-    assert budget_warning(Decimal("42500"), Decimal("7500"), Decimal("50000")) is None      # exactly 50,000
-    assert budget_warning(Decimal("42500"), Decimal("9000"), Decimal("50000")) is not None  # 51,500 is over
-    assert budget_warning(Decimal("42500"), Decimal("9000"), None) is None                  # no budget set
+    assert (
+        budget_warning(Decimal("42500"), Decimal(
+            "5000"), Decimal("50000")) is None
+    )  # 47,500 fits
+    assert (
+        budget_warning(Decimal("42500"), Decimal(
+            "7500"), Decimal("50000")) is None
+    )  # exactly 50,000
+    assert (
+        budget_warning(Decimal("42500"), Decimal(
+            "9000"), Decimal("50000")) is not None
+    )  # 51,500 is over
+    assert (
+        budget_warning(Decimal("42500"), Decimal("9000"), None) is None
+    )  # no budget set
 
 
 def test_budget_usage():

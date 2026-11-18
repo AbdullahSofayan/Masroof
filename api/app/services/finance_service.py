@@ -3,6 +3,7 @@
 This file holds the pure calculations (no database yet).
 The database layer will call these once the team's models are ready.
 """
+
 from decimal import Decimal
 
 
@@ -18,7 +19,9 @@ def limit_warning(amount: Decimal, max_amount: Decimal | None) -> str | None:
     return f"Amount {amount} SAR is above the {max_amount} SAR limit for this category."
 
 
-def budget_warning(spent: Decimal, amount: Decimal, budget: Decimal | None) -> str | None:
+def budget_warning(
+    spent: Decimal, amount: Decimal, budget: Decimal | None
+) -> str | None:
     """Return a warning if this request would take the department over its monthly budget.
 
     spent  = approved spending already counted this month.
@@ -38,4 +41,9 @@ def budget_usage(spent: Decimal, budget: Decimal) -> dict:
         percent = Decimal("0")
     else:
         percent = round(spent / budget * 100, 1)
-    return {"budget": budget, "spent": spent, "remaining": remaining, "percent": percent}
+    return {
+        "budget": budget,
+        "spent": spent,
+        "remaining": remaining,
+        "percent": percent,
+    }
