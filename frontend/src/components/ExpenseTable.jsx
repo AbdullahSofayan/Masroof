@@ -8,7 +8,7 @@ import { EmptyState } from './UI';
 const COLUMN_WIDTHS = ['26%', '18%', '13%', '16%', '17%', '10%'];
 const ARROW_CLASS = 'transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-focus-within:translate-x-0.5 group-focus-within:-translate-y-0.5';
 
-export default function ExpenseTable({ expenses, manager = false, onSelect, emptyTitle, emptyDescription }) {
+export default function ExpenseTable({ expenses, manager = false, reviewPath = '/manager/expenses', onSelect, emptyTitle, emptyDescription }) {
   return <>
     <div className="overflow-x-auto">
       <table className="expense-table relative min-w-[1040px] table-fixed">
@@ -29,7 +29,7 @@ export default function ExpenseTable({ expenses, manager = false, onSelect, empt
             <td style={{ width: COLUMN_WIDTHS[3] }} className="whitespace-nowrap text-right font-semibold tabular-nums text-slate-800">{formatMoney(expense.amount)}</td>
             <td style={{ width: COLUMN_WIDTHS[4] }}><StatusBadge status={expense.status} /></td>
             <td style={{ width: COLUMN_WIDTHS[5] }}>{manager
-              ? <Link className="text-link" to={`/manager/expenses/${expense.id}`}>Review<ArrowUpRight size={14} className={ARROW_CLASS} /></Link>
+              ? <Link className="text-link" to={`${reviewPath}/${expense.id}`}>Review<ArrowUpRight size={14} className={ARROW_CLASS} /></Link>
               : <button className="text-link" onClick={() => onSelect(expense.id)} aria-label={`View expense ${expense.id}`}>View<ArrowUpRight size={14} className={ARROW_CLASS} /></button>}
             </td>
           </>}</AnimatedExpenseRows>

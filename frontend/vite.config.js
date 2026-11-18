@@ -11,6 +11,9 @@ export default defineConfig({
           groups: [{
             name: 'animation-vendor',
             test: /node_modules[\\/](?:gsap|motion|motion-dom|motion-utils|framer-motion)[\\/]/,
+          }, {
+            name: 'charts-vendor',
+            test: /node_modules[\\/](?:recharts|d3-[a-z-]+|victory-vendor|es-toolkit|immer|reselect|@reduxjs|redux|react-redux|decimal\.js-light|eventemitter3)[\\/]/,
           }],
         },
       },

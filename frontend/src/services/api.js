@@ -14,12 +14,12 @@ export function setToken(value) {
   token = value;
 }
 export const getToken = () => token;
-const sleep = () => new Promise((resolve) => setTimeout(resolve, import.meta.env.MODE === 'test' ? 0 : MOCK_DELAY));
+export const sleep = () => new Promise((resolve) => setTimeout(resolve, import.meta.env.MODE === 'test' ? 0 : MOCK_DELAY));
 function expireSession() {
   setToken(null);
   window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
 }
-async function request(path, { method = 'GET', body, raw = false } = {}) {
+export async function request(path, { method = 'GET', body, raw = false } = {}) {
   const headers = new Headers();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (body && !(body instanceof FormData) && !(body instanceof URLSearchParams)) headers.set('Content-Type', 'application/json');
@@ -42,25 +42,26 @@ async function request(path, { method = 'GET', body, raw = false } = {}) {
   if (response.status === 204) return null;
   return response.json();
 }
-function actor() {
+export function actor() {
   const user = demoUsers.find((entry) => token === `demo-token-${entry.id}`);
   if (!user) { expireSession(); throw new ApiError('Your session has expired. Please sign in again.', 401); }
   return user;
 }
-function readData() {
+export function readData() {
   const stored = localStorage.getItem(STORAGE_KEYS.DATA);
   if (!stored) return createDemoData();
   try { const result = JSON.parse(stored); if (Array.isArray(result)) return result; } catch { /* Recover invalid demo storage. */ }
   return createDemoData();
 }
-function writeData(data) {
+export function writeData(data) {
   try { localStorage.setItem(STORAGE_KEYS.DATA, JSON.stringify(data)); }
   catch { throw new ApiError('Demo storage is full or unavailable. Free browser storage and try again.'); }
 }
 function assertView(user, expense) {
   const own = expense.requester.id === user.id && hasPermission(user, PERMISSIONS.OWN);
   const department = expense.department.id === user.department_id && hasPermission(user, PERMISSIONS.DEPARTMENT);
-  if (!own && !department) throw new ApiError('You do not have access to this expense.', 403);
+  const finance = hasPermission(user, PERMISSIONS.FINANCE);
+  if (!own && !department && !finance) throw new ApiError('You do not have access to this expense.', 403);
 }
 function assertEditable(user, expense) {
   if (expense.requester.id !== user.id || !hasPermission(user, PERMISSIONS.OWN)) throw new ApiError('Only the requester can change this expense.', 403);
