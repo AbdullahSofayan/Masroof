@@ -2,7 +2,7 @@
 
 *From: Jassar (ML) · 16 Nov 2026 · Based on the latest ERD*
 
-**✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below.** Next: their code on `backend/expense`.
+**✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below.** Omar's first code is on `backend/expense` (18 Nov) → checked in **"Repo check — 18 Nov (afternoon)"** at the end: 4 changes for the AI part.
 
 These changes let the backend store and show the AI model's results correctly.
 Each one has a reason, so you can push back if something doesn't fit.
@@ -95,8 +95,8 @@ backend reject it, so a request never sits in "Pending" forever.
 - The ML service **never connects to the database** — the backend sends the data.
 - Score in a **background task** after a request is created or edited, so the employee never waits.
 - If the ML service is down, **save the request anyway** with no AI result, and score it later.
-- Full details: `ml/docs/ml_contract.md` (**v0.4**, matches this ERD) on the `ml/stub-service` branch.
-  Backend → Parts B, C, E · Frontend → Part D. Part C is reference code written against the ERD; ML will align it with your real code once it's on `backend/expense`.
+- Full details: `ml/docs/ml_contract.md` (**v0.4.1**, matches this ERD) on the `ml/stub-service` branch.
+  Backend → Parts B, C, E · Frontend → Part D. Part C is reference code written against the ERD; **C10** checks it against Omar's first `backend/expense` code.
 
 ---
 
@@ -152,7 +152,42 @@ The mock `risk_level: 'High'` (capitalized) is handled with `toLowerCase()` — 
 
 ---
 
+## Repo check — 18 Nov (afternoon): `backend/expense`
+
+Omar pushed *"Add expense API, schemas, service and decision engine"* (commit `f7425d1`, force-push, replaces the 14 Nov mock).
+Still in memory: no MySQL, login or ML call yet — that's expected.
+
+**Already matches ✅**
+- Statuses `Pending` / `Approved` / `Rejected`; approve / reject only while Pending; amounts in SAR.
+- `department_id` is copied from the employee when the request is created (snapshot).
+- Rule warnings (limit, budget) are a list of strings, **separate from the AI result** — exactly as agreed.
+- AI not available → `None`, no error.
+- Uses Yousef's `limit_warning` / `budget_warning` correctly (all 5 tests pass when `finance_service.py` is added).
+
+**4 changes for the AI part** (code for each in contract **C10**, C2–C4)
+
+| # | What's in the code now | Change | Why it matters |
+|---|---|---|---|
+| 1 | `decision_engine` reads `anomaly_result.get("anomaly_score")` | The ML service returns **`score`** → save it in `anomaly_score` | Tested with the stub: the score comes back as `None`, so the queue can't sort by risk |
+| 2 | Only `risk_level` and the score are kept | Also save `reason_details` → `risk_justification` | Without it, the manager sees a badge with **no reasons** |
+| 3 | The AI result is passed in **before** the expense is saved | Save first (AI columns empty), then score in a **background task** (`score_expense_in_background(expense.id)`) | The ML service needs `expense_id` and the employee's other requests that day (to catch splits); scoring after saving never slows the employee down; the other Pending requests of that day get re-scored |
+| 4 | `ExpenseCreate` has `category: str`, but `expense_service` reads `expense_data["category_id"]` | Pick one (suggested: `category_id` from the frontend). When calling ML, send the **name** (`expense.category.name`) | It will crash with `KeyError` once connected; ML accepts only the 6 names |
+
+Simplest fix for 1–3: `evaluate_expense` does **rules only** (returns `{"warnings": [...]}`), and the AI goes through
+`anomaly_service.save_result` / `score_expense_in_background` from the contract (C3). Test 4 (`"High"`, `-0.15`) should go:
+`risk_level` is lowercase and `score` is 0–1.
+
+**Smaller things (ERD, not AI)**
+- `decision_engine` imports `finance_service`, which is only on `backend/finance` → on `backend/expense` alone the test fails (`ModuleNotFoundError`). Merge `backend/finance` first.
+- Reject saves the reason as `reason`; the ERD column is `manager_note`. `reviewed_by` and `reviewed_at` aren't set yet.
+- The approve / reject section is titled "Finance Admin", but in the ERD the **department manager** approves (the comments inside already say managers).
+- No edit endpoint yet; when it's added, re-score the request after the edit (C4).
+
+Other branches: no new commits since 17 Nov (`frontend/employee-manager` and `ml/forecasting` items above are still open).
+
+---
+
 ## Please tell ML when
 
-- The ERD changes are applied, and your code is pushed to `backend/expense`
+- MySQL and the ML call are added on `backend/expense` (ML will check it again)
 - You want to change a category name, a column the model uses, or the roles

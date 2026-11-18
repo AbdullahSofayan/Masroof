@@ -1,8 +1,8 @@
 # Masroof — ML Project Brief
 
-*Last updated: 18 Nov 2026 (backend OK on the ERD changes; repo re-checked; contract v0.4; Step 4 handoff not sent yet) · Owner of the ML part: Jassar*
+*Last updated: 18 Nov 2026 (Step 5 feature engineering done; backend OK on the ERD changes; contract v0.4; Step 4 handoff not sent yet) · Owner of the ML part: Jassar*
 
-**Where things stand (18 Nov):** Steps 1–2 done, Step 3 done (**contract v0.4**, 18 Nov — matches the new ERD; Part C to be aligned when the backend code is pushed), **Step 4 done** (247,838 requests, 20 departments, 4,599 users). ✅ **Backend replied OK to the ERD changes** (18 Nov) — next from them: their real code on `backend/expense`. ⏳ **The Step 4 handoff has NOT been sent to the team yet** (`step4_handoff.md`, `sample_requests.csv`, `forecast_data.csv`). **Next: Step 5** — starts when Jassar says. ⚠️ Repo check 18 Nov (re-verified): mismatches in `frontend/employee-manager` and data committed in `ml/forecasting` → section 11 + `masroof_changes_for_team.md`.
+**Where things stand (18 Nov):** Steps 1–2 done, Step 3 done (**contract v0.4**, 18 Nov — matches the new ERD; Part C to be aligned when the backend code is pushed), **Step 4 done** (247,838 requests, 20 departments, 4,599 users). ✅ **Backend replied OK to the ERD changes** (18 Nov) — next from them: their real code on `backend/expense`. ⏳ **The Step 4 handoff has NOT been sent to the team yet** (`step4_handoff.md`, `sample_requests.csv`, `forecast_data.csv`). ✅ **Step 5 done (18 Nov)**: 10 features from earlier requests only, cold-start rule with N = 5, saved `features.csv` (247,838 × 17). **Next: Step 6** (feature selection), which starts with one decision: what to do about the 13 very busy employees (see Step 5). ⚠️ Repo check 18 Nov (re-verified): mismatches in `frontend/employee-manager` and data committed in `ml/forecasting` → section 11 + `masroof_changes_for_team.md`.
 
 **🆕 Mentor feedback received (16 Nov):** 5 comments, all about AI/ML → full list and status in **section 10**. Every change they cause is marked **🆕 MF1–MF5** through this brief (Steps 5, 7, 8, 9, gotchas, open questions).
 
@@ -114,8 +114,8 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 | 2 | Data Cleaning | notebooks/02_data_cleaning | ✅ Done |
 | 3 | Team Contract + Stub | docs/ml_contract.md, src/service.py, src/predict.py | ✅ Done — **contract v0.4** (18 Nov): written for the new ERD. Part C is ERD-based reference code (tested vs the stub); align with the real code once it's on `backend/expense` |
 | 4 | Category Mapping + Localization | notebooks/03_localization | ✅ Done (17 Nov) |
-| 5 | Feature Engineering | notebooks/04_feature_engineering | ⬜ Next — starts when Jassar says · 🆕 MF1 |
-| 6 | Feature Selection | notebooks/05_feature_selection | ⬜ |
+| 5 | Feature Engineering | notebooks/04_feature_engineering | ✅ Done (18 Nov) · 🆕 MF1 done |
+| 6 | Feature Selection | notebooks/05_feature_selection | ⬜ Next |
 | 7 | Model Training | notebooks/06_model_training | ⬜ · 🆕 MF4 |
 | 8 | Evaluation + Reasons | notebooks/07_evaluation | ⬜ · 🆕 MF3, MF4 |
 | 9 | ML Service (real model) | notebooks/08_model_export, src/ | ⬜ · 🆕 MF1 |
@@ -138,18 +138,34 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 - 📥 Get: OK on the 20 department names; how much history goes into the demo DB (recommended: a few departments + last ~6 months); block or warn over limit.
 - Possible later improvement: descriptions chosen from the original MCC (so they fit the amount).
 
-**Step 5 — Feature engineering** (10 features)
-- `log_amount`, `amount_vs_employee`, `amount_vs_employee_category`, `amount_vs_department`, `unusual_category_for_employee`, `is_weekend`, `is_round_amount` (computed on the original amount), `same_category_day_count` (split requests), `duplicate_request`, `daily_request_count`.
+**Step 5 — Feature engineering** ✅ (done 18 Nov)
+- Input `requests.csv` → output **`data/processed/features.csv`** (247,838 rows × 17 columns: `expense_id`, `requester_id`, `department_id`, `category`, `expense_date`, `amount_sar`, `baseline_level` + the 10 features). Whole notebook runs in ~15 s.
+- **The 10 features:**
+
+| Feature | Meaning |
+|---|---|
+| `log_amount` | log(1 + amount SAR), "big in general" |
+| `amount_vs_employee_category` | z-score vs the employee's **earlier** requests in this category (with fallback, below) |
+| `amount_vs_employee` | z-score vs the employee's earlier requests (fallback: department → category) |
+| `amount_vs_department` | z-score vs the department's earlier requests (fallback: category) |
+| `category_share_for_employee` | share of the employee's earlier requests in this category (0 = first time). Under 5 earlier → department's share; no history → 1.0 |
+| `same_category_day_count` | employee + day + category (splits). Includes the request itself |
+| `duplicate_count` | employee + day + category + amount (duplicates) |
+| `daily_request_count` | employee + day |
+| `is_weekend` | Friday or Saturday (`dayofweek` 4, 5) → 8.2% |
+| `is_round_amount` | multiple of 100 and ≥ 100, checked on `amount_usd` in training (the original currency); **on SAR in the app** → 1,841 rows (0.74%) |
+
+- **Part A — earlier requests only (MF1):** sort by `expense_date`, `expense_id`; per group (emp, empcat, dept, deptcat, cat) and **per day**: cumulative n / sum / sum of squares of `log_amount`, minus the current day → mean and std of **earlier days only** (same-day requests don't see each other). Checked against a brute-force calculation: 0 mismatches on 1,500 values.
+- **Part B — cold-start rule (MF1), N = `MIN_HISTORY` = 5:** for `amount_vs_employee_category` use the first level with ≥ 5 earlier requests: employee in category → employee → department in category → category → none (z = 0). Result: empcat 80.6%, emp 10.4%, deptcat 8.6%, cat 0.3%, none 119 rows. Saved as `baseline_level` (for reasons like "compared with the department because the employee is new").
+  - `MIN_STD = 0.1` (spread floor) fixes employees who always paid the same amount (e.g. employee 2099 always 112.46 → spread 0 → 128 infinite z-scores, one of 53.7 million). `Z_CAP = 10` caps extremes. At the cap: 175 / 66 / 0.
+  - Check: employee 3170, 744.90 SAR Transportation on 8 Dec (first time in the category) → 5.87 vs the employee, 0.69 vs the department, category share 0.00.
+- **Part C — same-day counts use the whole day** (including requests created later that day). That matches the app: the backend re-scores the Pending same-day siblings (contract C3). Other days are never used.
+  - Known cases for Step 8: **451** splits (3 requests in one category on one day, each under the limit, together over it), e.g. employee 1157 on 14 Jan 2026: 3 Food requests (544.61 + 688.84 + 787.80 = 2,021.25 > 2,000). Duplicate example: employee 1001, 1,322.25 Travel twice on 20 Aug 2025.
+- ⚠️ **Finding: very busy employees.** 13 employees (0.3%) usually send ≥ 5 requests per day and make up **15.7% of all rows**. The busiest, employee 4481, has 9,544 Travel requests (mostly one travel agency → books trips for others). Normal on a company card, not for personal requests: same-day counts reach 164 (mean 6.35, median 2). **Decide in Step 6:** drop these 13 from training, or add a "vs this employee's usual day" count.
+- **Where `MIN_HISTORY` lives in the app:** now in notebook 04 (chosen + tested); in Step 9 it moves to `src/features.py` (with `MIN_STD`, `Z_CAP`, the z-score and the cascade), imported by the notebooks and the service. **Changing N means rebuilding the features and retraining.**
 - Dropped: `vendor_freq`, `posting_delay` (backend has no vendor or posting date).
-- Z-score helper: std = 0 → treat as "normal" (avoid division by zero → infinity).
-- 🆕 **MF1 — prior transactions only (no leakage):** sort by `expense_date`; every employee / department / category stat (mean, std, counts, "usual categories") uses only requests **before** the one being scored — expanding stats per group with `shift(1)`, never whole-year averages. The request must never be part of its own baseline, and no stat may include future requests.
-- 🆕 **MF1 — exact rule for new employees (cold start):** write it down and apply it the same way in training and serving. Proposed (N = 5, to confirm):
-  1. ≥ N prior requests in this category → compare with the employee-within-category.
-  2. Else ≥ N prior requests overall → compare with the employee overall.
-  3. Else → compare with the department within the category.
-  4. No department history → compare with the category overall.
-  - Also check: how often first / early requests get flagged just for being new.
-- 📤 Share: plain-language feature list (+ the cold-start rule). 📥 Get: confirmation the backend sends same-day requests.
+- 📤 Share: plain-language feature list (+ the cold-start rule). 📥 Get: confirmation the backend sends same-day requests (already in contract v0.4).
+
 **Step 6 — Feature selection**
 - Correlation check; remove features that carry the same information (Isolation Forest picks features at random, so duplicates get double weight).
 - No scaling/encoding needed (trees are scale-invariant; all features are numeric).
@@ -175,6 +191,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 - Move feature code to `src/features.py` (one source of truth for training and serving).
 - Real `src/predict.py` behind the **same endpoints**; save model + per-employee/department/category stats.
 - 🆕 **MF1:** saved stats = history up to the last training date; a new request is compared only with requests before it, and the cold-start rule from Step 5 is in `features.py` (same code for training and serving).
+- **Saved stats format:** per group (employee, employee + category, department, department + category, category): **n, sum, sum of squares** of `log_amount` (stored next to the model in `models/`). New request → look up its groups → same cascade as Step 5 (an unknown new employee has n = 0 → department in category). After a request is saved, add it to the sums (updating = addition). Save the updated stats to the file so a restart doesn't lose them (enough for the demo).
 - 📤 Share: the real service; backend runs `python -m app.rescore_ai --all` once. 📥 Get: integration test results.
 
 **Step 10 — Demo request generator**
@@ -232,7 +249,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 ml/
 ├── data/                 (git-ignored)
 │   ├── raw/pcard_2014.csv
-│   └── processed/        pcard_clean.csv, requests.csv, departments.csv, users.csv, forecast_data.csv
+│   └── processed/        pcard_clean.csv, requests.csv, departments.csv, users.csv, forecast_data.csv, features.csv
 ├── docs/
 │   ├── ml_contract.md               (contract with backend + frontend)
 │   ├── masroof_ml_project.md        (this brief)
@@ -247,7 +264,7 @@ ml/
 │   ├── 01_data_exploration.ipynb     ✅
 │   ├── 02_data_cleaning.ipynb        ✅
 │   ├── 03_localization.ipynb         ✅
-│   ├── 04_feature_engineering.ipynb
+│   ├── 04_feature_engineering.ipynb  ✅
 │   ├── 05_feature_selection.ipynb
 │   ├── 06_model_training.ipynb
 │   ├── 07_evaluation.ipynb
@@ -283,20 +300,23 @@ ml/
 | 🆕 MF2: Forecasting model, horizon, last-week baseline, rolling validation, MAE target | Forecasting teammate | ✅ Covered in `ml/forecasting` (17 Nov): Linear Regression, next 4 weeks per department, last-week baseline, rolling validation, MAE in SAR |
 | **Send the Step 4 handoff to the team** (+ the repo-check fixes in `masroof_changes_for_team.md`) | Jassar | ⏳ Not sent yet |
 | Apply the ERD changes (section 1) | Backend | ✅ OK'd on 18 Nov — now waiting for their code |
-| Push their real code to `backend/expense` | Backend | Waiting (only the 14 Nov mock so far) |
-| Update the contract to v0.4 | ML | ✅ Done 18 Nov. Remaining: align Part C with the real backend code once it's on `backend/expense` |
+| Push their real code to `backend/expense` | Backend | 🟡 First version pushed 18 Nov (Omar, in memory). 4 AI changes sent (contract C10 + team file). Check again when MySQL + the ML call are added |
+| Update the contract to v0.4 | ML | ✅ Done 18 Nov → **v0.4.1** (C10 = review of Omar's first code) |
 | Are the 20 department names OK? How much history goes into the demo database? | Team / Backend | In `step4_handoff.md` — waiting for it to be sent |
 | Block or warn when a request is over its category limit? | Backend + team | Asked in `step4_handoff.md` |
 | How many flags can managers review (sets contamination)? 🆕 MF4: mentors require it | Team | Step 7 — needed |
-| 🆕 MF1: Confirm N for the cold-start rule (proposed 5) | ML | Step 5 |
+| 🆕 MF1: Confirm N for the cold-start rule (proposed 5) | ML | ✅ N = 5 (`MIN_HISTORY`), Step 5 |
+| The 13 very busy employees (15.7% of rows): drop from training or add a "vs usual day" count? | ML | Step 6 — first decision |
 
 ---
 
 ## 9. Things to remember (gotchas)
 
 - **Training–serving consistency:** the backend must compute features exactly like the notebooks → one shared `features.py`.
-- **Cold start:** a new employee/company has no history → compare to department, then category; seed the demo with PCard history. 🆕 MF1: exact rule in Step 5.
-- 🆕 **MF1 — leakage:** every stat uses only requests before the one being scored (`shift(1)` + expanding stats). Whole-year averages = leakage.
+- **Cold start:** a new employee/company has no history → compare to department, then category; seed the demo with PCard history. 🆕 MF1: exact rule done in Step 5 (N = 5, cascade empcat → emp → deptcat → cat).
+- 🆕 **MF1 — leakage:** every stat uses only requests from **earlier days** (day-level cumulative sums minus the current day). Whole-year averages = leakage. Same-day counts are the one exception on purpose (whole day, matched by re-scoring siblings).
+- **Zero spread:** always clip the std (`MIN_STD = 0.1`) and cap z (`Z_CAP = 10`), in training and serving.
+- **Round amounts:** training checks `amount_usd`, the service checks SAR (both = the amount as originally written).
 - **Split requests** only become visible once later requests arrive → re-score same-day siblings.
 - **No labels** → evaluate with planted anomalies, not accuracy. 🆕 MF3: include unseen patterns; unlabeled ≠ normal → no precision / false-alarm claims on real data.
 - **Honest caveats for the presentation:** PCard is card purchases (US government, 2014), not requests; seasons are American (no Ramadan/Eid pattern); ~32% of data excluded (no "Other" category).
@@ -310,7 +330,7 @@ All 5 comments are about AI/ML.
 
 | # | What the mentors asked | Were we already doing it? | What changes | Owner | Where |
 |---|---|---|---|---|---|
-| **MF1** | Build employee spending features from **prior transactions only**; define handling for **new employees** | ❌ Prior-only: **not planned** (stats were going to be whole-history). 🟡 New employees: **partly** (fallback to department under 5 purchases, but no exact rule) | Expanding stats with `shift(1)`; written cold-start rule; same code in training + serving | Jassar | Steps 5, 9; gotchas |
+| **MF1** | Build employee spending features from **prior transactions only**; define handling for **new employees** | ❌ Prior-only: **not planned** (stats were going to be whole-history). 🟡 New employees: **partly** (fallback to department under 5 purchases, but no exact rule) | ✅ **Done in Step 5 (18 Nov):** earlier-days-only stats (verified by brute force), written cascade rule with N = 5. Remaining: same code in serving (`features.py`, Step 9) | Jassar | Steps 5, 9; gotchas |
 | **MF2** | Specify the **forecasting model and horizon**; compare with a **last-week baseline** using **rolling validation** and numeric **MAE targets** | ❓ Not in this brief (forecasting teammate's part) | Teammate defines model + horizon, naive last-week baseline, walk-forward validation, MAE target in SAR | Forecasting teammate | Section 8 |
 | **MF3** | Test **unseen** synthetic anomaly patterns; don't treat unlabeled purchases as **confirmed normal** when reporting false alarms / precision | 🟡 **Partly**: planting anomalies + detection rate was planned; unseen patterns and the reporting rule were not | Seen vs unseen anomaly sets; recall + flag rate only; flagged real rows = "unverified" | Jassar (+ a teammate to make the unseen set) | Step 8; gotchas |
 | **MF4** | Set **risk thresholds against review capacity**; compare Isolation Forest with **simple spending-policy rules** | 🟡 Thresholds: **planned** (Step 7 asked for review capacity). ❌ Rules comparison: **not planned** | Cut-offs from managers' capacity; rules baseline; compare at the same number of flags | Jassar (+ team for the capacity number) | Steps 7, 8; sections 5, 8 |
@@ -318,7 +338,8 @@ All 5 comments are about AI/ML.
 
 **Summary:**
 - ✅ Already planned: thresholds from review capacity (MF4), planting anomalies (MF3), department fallback for new employees (MF1).
-- ❌ New work for Jassar: prior-only stats (MF1), exact cold-start rule (MF1), unseen anomaly set + honest reporting (MF3), rules baseline comparison (MF4).
+- ✅ Done: prior-only stats + exact cold-start rule (MF1, Step 5).
+- ❌ New work for Jassar: unseen anomaly set + honest reporting (MF3), rules baseline comparison (MF4).
 - ➡️ Not Jassar's: forecasting (MF2, teammate), receipt GenAI (MF5, optional, team decides).
 
 ---
@@ -332,7 +353,7 @@ New branches since 15 Nov:
 | `backend/finance` | Yousef | Finance rules: limit warning **per single request**, monthly department budget warning, budget usage; request schemas for departments / limits / budgets (with tests) | ✅ Matches what was agreed. No category names hard-coded |
 | `ml/forecasting` | Abdullah | `forecasting.ipynb` using `forecast_data.csv` + `departments.csv` | ✅ Same data as the anomaly model. ⚠️ **The data files are committed to git** (`ml/data/forecast_data.csv`, 8.8 MB) |
 | `frontend/employee-manager` | Ziyad | Employee + manager screens, mock API, risk box | ⚠️ 3 mismatches (below) |
-| `backend/expense` | Omar | Unchanged since 14 Nov (in-memory mock) | — |
+| `backend/expense` | Omar | **18 Nov:** expense API, schemas, decision engine (still in memory) | ✅ statuses, SAR, rule warnings separate. ⚠️ 4 AI changes: reads `anomaly_score` instead of `score`; drops `reason_details`; AI called before saving; `category` vs `category_id` → contract C10 |
 
 **Frontend mismatches (affect the model / the agreements):**
 1. **Categories:** mock uses *Meals & hospitality, Office supplies, Travel & transport, Software & subscriptions, Training & events* — not the 6 agreed names. The ML service rejects any other name (422).

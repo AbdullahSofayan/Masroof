@@ -1,7 +1,7 @@
 # ML Contract — Masroof Anomaly Detection
 
 **Owner:** ML (Jassar) · **For:** Backend (`backend/expense`, `backend/finance`), Frontend (`frontend/employee-manager`)
-**Version:** v0.4 — 18 Nov 2026 · Based on the **new ERD** (OK'd by the backend on 18 Nov) and the Step 4 demo data
+**Version:** v0.4.1 — 18 Nov 2026 · Based on the **new ERD** (OK'd by the backend on 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code
 **Stub:** the ML service works now with fake scores (`stub-0.2`). The real model (Step 9) keeps the same endpoints and fields.
 
 Everything the backend and frontend need from ML is in this file.
@@ -11,7 +11,7 @@ If something here needs to change, tell ML first, so the stub and the real model
 |---|---|---|
 | A | Everyone | What the model does, how it fits in, who sees what, ports |
 | B | Backend | The ML service API + which response field goes into which EXPENSE column |
-| C | Backend | Integration code written against the ERD (adjust names to your code) |
+| C | Backend | Integration code written against the ERD (adjust names to your code); C10 = review of the first `backend/expense` code |
 | D | Frontend | Badge, AI reasons vs rule warnings, screens per role, categories, statuses, texts, mock data |
 | E | Backend | Seed data: files, columns, ID ranges, import order, limits, budget |
 | F | Everyone | Testing with the stub, what changes later, mentor feedback, open questions, changelog |
@@ -253,10 +253,11 @@ All three columns are **null until the request has been scored**.
 
 # Part C — Backend integration
 
-The backend's code isn't on `backend/expense` yet, so this part is written **against the ERD**:
-SQLAlchemy models named `Expense`, `Category`, `User`, `Department`, a `SessionLocal` session factory,
-and a settings object with `ai_service_url`. **Rename to match your code** — the logic stays the same.
-ML will align this part with your real code once it's pushed.
+This part is written **against the ERD**: SQLAlchemy models named `Expense`, `Category`, `User`,
+`Department`, a `SessionLocal` session factory, and a settings object with `ai_service_url`.
+**Rename to match your code** — the logic stays the same.
+The first real code on `backend/expense` (18 Nov, still in memory, no MySQL yet) is checked in **C10**:
+what already matches and the 4 changes the AI part needs.
 
 The code below was tested against the running stub service on a copy of the ERD tables (SQLite).
 It only needs `httpx` (`pip install httpx`).
@@ -574,6 +575,58 @@ class AnomalySummary(BaseModel):
 `top_reasons` = count `risk_justification[*].code` over requests with `risk_level` in (`medium`, `high`).
 Same period filter as the rest of the finance dashboard (e.g. this month).
 
+## C10. Fitting this into `backend/expense` (checked 18 Nov, commit `f7425d1`)
+
+Omar's first version: `routes/expenses.py`, `schemas/expenses.py`, `services/decision_engine.py`,
+`services/expense_service.py`, `test_decision_engine.py`. Data is still in memory (no MySQL, login or ML call yet).
+
+**Already matches ✅:** statuses `Pending` / `Approved` / `Rejected`; approve/reject only while Pending;
+amounts in SAR; `department_id` snapshot from the employee; rule warnings stored as a list of strings,
+separate from the AI result (C5); "AI not available" → `None`, no error.
+
+**4 changes for the AI part:**
+
+| # | Where | Now | Change | Why |
+|---|---|---|---|---|
+| 1 | `decision_engine.evaluate_expense` | Reads `anomaly_result.get("anomaly_score")` | Make it **rules only** (code below). The AI result is saved by `save_result` (C3): `score` → `anomaly_score` | The ML service returns **`score`**, so `anomaly_score` is always `None` (tested with the stub) |
+| 2 | Same | Keeps only `risk_level` + the score | `reason_details` → `risk_justification` (C3 `save_result`) | Without it the manager sees a badge with **no reasons** |
+| 3 | `expense_service.prepare_expense` + `create_expense` | AI result is an input **before** saving | Save first (AI columns `None`), then `background_tasks.add_task(score_expense_in_background, expense.id)` (C3, C4) | The ML request needs `expense_id` and `same_day_requests`; scoring after saving never slows the employee down; same-day Pending requests get re-scored (splits) |
+| 4 | `schemas.ExpenseCreate` vs `expense_service` | Schema has `category: str`, service reads `expense_data["category_id"]` → `KeyError` | Pick one (suggested: `category_id` in the request). The ML call sends the **name** (`expense.category.name`, C2) | The ML service accepts only the 6 names |
+
+`decision_engine.py`, rules only (tested with `finance_service` from `backend/finance`: the 4 rule tests pass):
+
+```python
+from decimal import Decimal
+
+from app.services.finance_service import limit_warning, budget_warning
+
+
+def evaluate_expense(amount: Decimal, category_limit: Decimal | None,
+                     monthly_spent: Decimal, monthly_budget: Decimal | None) -> dict:
+    """Rule warnings only. The AI result is added later, after the expense is saved (C3)."""
+    warnings = [w for w in (
+        limit_warning(amount, category_limit),
+        budget_warning(monthly_spent, amount, monthly_budget),
+    ) if w]
+    return {"warnings": warnings}
+```
+
+**Test 4** (`"High"`, `-0.15`) doesn't match the ML response: `risk_level` is lowercase and `score` is 0–1.
+Remove it from the decision-engine tests; test `save_result` with a stub-shaped result instead:
+
+```python
+result = {"score": 0.9, "risk_level": "high", "reason_details": [
+    {"code": "large_amount", "text_en": "Very large amount", "text_ar": "مبلغ كبير جداً"}]}
+save_result(expense, result)
+assert expense.anomaly_score == 0.9 and expense.risk_level == "high"
+assert expense.risk_justification[0]["code"] == "large_amount"
+```
+
+Not AI, but noticed (ERD): reject saves `reason`, the ERD column is `manager_note`; `reviewed_by` / `reviewed_at`
+aren't set yet; the approve/reject section is titled "Finance Admin", but the department manager approves.
+`decision_engine` imports `finance_service`, which is on `backend/finance` → merge that branch first
+(on `backend/expense` alone the test fails with `ModuleNotFoundError`).
+
 ---
 
 # Part D — Frontend
@@ -884,7 +937,7 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 | Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Open |
 | Who builds receipt reading (`/receipt/...`)? | Team | Open |
 | Does forecasting join this service (`/forecast/...`) or get its own URL? | Forecasting + backend | Open |
-| Align Part C with the real backend code | ML | When the code is on `backend/expense` |
+| Align Part C with the real backend code | ML | 🟡 First version checked in C10 (18 Nov). Check again when MySQL + the ML call are added |
 
 ## F5. Changing this contract
 
@@ -893,6 +946,7 @@ file, then tells both teams. The version at the top goes up with every change.
 
 | Version | Date | Changes |
 |---|---|---|
+| v0.4.1 | 18 Nov | C10: checked Omar's first `backend/expense` code — what matches + 4 changes for the AI part (score field name, reasons, score after saving, category name vs id) |
 | v0.4 | 18 Nov | Rewritten for the new ERD: one approval step, `role` enum, AI columns `anomaly_score` / `risk_level` / `risk_justification`, rule warnings separate from AI reasons, ERD-based Part C, seed format with `categories`, `expense_limits`, `budget`, Step 4 ID ranges and limits, categories + statuses with Arabic labels, mentor feedback |
 | v0.3 | 15 Nov | Full integration for the `api/` skeleton (reverted the same day) |
 | v0.2 | 15 Nov | HTTP service instead of a Python import; requests instead of card transactions |
