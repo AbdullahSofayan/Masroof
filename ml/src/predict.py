@@ -26,7 +26,7 @@ CATEGORIES = [
     "Equipment & Maintenance",
 ]
 
-# code -> (English, Arabic). Drafts until Step 8; the list may shrink after Step 6.
+# code -> (English, Arabic). The list is final after Step 6 (all 10 kept); texts may be polished in Step 8.
 REASONS = {
     "amount_high_for_employee": (
         "Amount is much higher than this employee's usual requests",
@@ -35,8 +35,8 @@ REASONS = {
         "Amount is much higher than this employee usually requests in this category",
         "المبلغ أعلى بكثير مما يطلبه هذا الموظف عادةً في هذه الفئة"),
     "amount_high_for_department": (
-        "Amount is much higher than usual for this department",
-        "المبلغ أعلى بكثير من المعتاد في هذا القسم"),
+        "Amount is much higher than usual for this department in this category",
+        "المبلغ أعلى بكثير من المعتاد في هذا القسم لهذه الفئة"),
     "large_amount": (
         "Very large amount",
         "مبلغ كبير جداً"),
