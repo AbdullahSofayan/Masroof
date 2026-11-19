@@ -63,14 +63,14 @@ export function ForecastChart({ forecast }) {
 /** Simple ranked bars, used for spend by department / category / employee. */
 export function RankedBars({ rows, emptyText = 'Nothing to show yet.', onSelect, selectedKey }) {
   const maximum = Math.max(0, ...rows.map((row) => row.amount));
-  if (!rows.length) return <p className="py-5 text-sm text-zinc-400">{emptyText}</p>;
+  if (!rows.length) return <p className="py-5 text-sm text-zinc-500">{emptyText}</p>;
   return <div className="space-y-1">
     {rows.map((row) => {
       const width = maximum > 0 ? row.amount / maximum * 100 : 0;
       const content = <>
         <div className="mb-2 flex items-start justify-between gap-3 text-[11px]">
           <span className="min-w-0 truncate text-zinc-600" dir="auto">{row.label}</span>
-          <span className="shrink-0 text-right font-medium tabular-nums text-zinc-900">{formatMoney(row.amount)}{row.note && <span className="ml-1 text-[10px] font-normal text-zinc-400">{row.note}</span>}</span>
+          <span className="shrink-0 text-right font-medium tabular-nums text-zinc-900">{formatMoney(row.amount)}{row.note && <span className="ml-1 text-[10px] font-normal text-zinc-500">{row.note}</span>}</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100" aria-hidden="true"><div className="h-full rounded-full" style={{ width: `${width}%`, background: row.highlight ? CHART.current : '#18181b' }} /></div>
       </>;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
-import { DECISION, STATUS } from '../utils/constants';
+import { STATUS } from '../utils/constants';
 import { today } from '../utils/formatters';
 import { DEMO_PASSWORD } from './mockData';
 
@@ -12,101 +12,118 @@ vi.stubGlobal('localStorage', {
 });
 vi.stubGlobal('window', new EventTarget());
 const { api } = await import('./api');
-const { financeApi } = await import('./financeApi');
+const { financeApi, effectiveStatus, normalizeExpense, budgetUsage } = await import('./financeApi');
 const login = (username = 'finance') => api.login(username, DEMO_PASSWORD);
+const [YEAR, MONTH] = today().split('-').map(Number);
 
 beforeEach(() => { storage.clear(); api.logout(); });
 
 describe('finance access', () => {
   it('rejects employees and managers', async () => {
     await login('sara');
-    await expect(financeApi.queue()).rejects.toMatchObject({ status: 403 });
-    await login('khalid');
     await expect(financeApi.dashboard()).rejects.toMatchObject({ status: 403 });
-  });
-  it('lets finance open any department’s expense, including its receipt', async () => {
-    await login();
-    const [first] = await financeApi.queue();
-    expect((await api.getExpense(first.id)).id).toBe(first.id);
+    await login('khalid');
+    await expect(financeApi.budgets({ year: YEAR, month: MONTH })).rejects.toMatchObject({ status: 403 });
   });
 });
 
-describe('payout queue decisions', () => {
-  it('lists only pending_finance requests, oldest first', async () => {
+describe('one approval step', () => {
+  it('only ever reports Pending, Approved or Rejected', async () => {
     await login();
-    const queue = await financeApi.queue();
-    expect(queue.length).toBeGreaterThan(0);
-    expect(queue.every((expense) => expense.status === STATUS.PENDING_FINANCE)).toBe(true);
-    expect(queue.map((expense) => expense.expense_date)).toEqual([...queue.map((expense) => expense.expense_date)].sort());
+    const statuses = new Set((await financeApi.expenses()).map((expense) => expense.status));
+    expect([...statuses].every((status) => [STATUS.PENDING_MANAGER, STATUS.APPROVED, STATUS.REJECTED].includes(status))).toBe(true);
   });
-  it('approves as final and records the finance decision', async () => {
-    await login();
-    const [first] = await financeApi.queue();
-    const result = await financeApi.decide(first.id, DECISION.APPROVE, '');
-    expect(result.status).toBe(STATUS.APPROVED);
-    expect(result.approvals.at(-1)).toMatchObject({ decision: STATUS.APPROVED, actor_name: 'Lina Hassan' });
-    expect((await financeApi.queue()).some((expense) => expense.id === first.id)).toBe(false);
-    await expect(financeApi.decide(first.id, DECISION.REJECT, 'late')).rejects.toMatchObject({ status: 409 });
+  it('treats a manager approval as final', () => {
+    expect(effectiveStatus(STATUS.PENDING_FINANCE)).toBe(STATUS.APPROVED);
+    expect(effectiveStatus('Approved')).toBe(STATUS.APPROVED);
+    expect(effectiveStatus('Rejected')).toBe(STATUS.REJECTED);
+    expect(effectiveStatus('Pending')).toBe(STATUS.PENDING_MANAGER);
+    expect(effectiveStatus(STATUS.NEEDS_CHANGES)).toBe(STATUS.PENDING_MANAGER);
   });
-  it('requires a note to reject and refuses request-changes', async () => {
+  it('counts an expense the manager approves in the demo', async () => {
+    await login('khalid');
+    await api.decide(102, 'approve', '');
     await login();
-    const [first] = await financeApi.queue();
-    await expect(financeApi.decide(first.id, DECISION.REJECT, '  ')).rejects.toThrow(/note/);
-    await expect(financeApi.decide(first.id, DECISION.REQUEST_CHANGES, 'fix')).rejects.toThrow(/approve or reject/);
-    expect((await financeApi.decide(first.id, DECISION.REJECT, 'Duplicate claim')).status).toBe(STATUS.REJECTED);
+    expect((await financeApi.expenses()).find((expense) => expense.id === 102).status).toBe(STATUS.APPROVED);
   });
-  it('refuses to approve an expense without a receipt', async () => {
+  it('keeps expenses employees created when demo data is refreshed', async () => {
     await login();
-    const [first] = await financeApi.queue();
+    await financeApi.expenses();
     const data = JSON.parse(storage.get('masroof.demo.v1'));
-    data.find((expense) => expense.id === first.id).attachment_url = null;
+    data.push({ ...data[0], id: 99999, requester: { id: 11, full_name: 'Omar' }, description: 'mine' });
+    data.forEach((entry) => { if (entry.seed_version) entry.seed_version = 1; });
     storage.set('masroof.demo.v1', JSON.stringify(data));
-    await expect(financeApi.decide(first.id, DECISION.APPROVE)).rejects.toMatchObject({ status: 422 });
+    const expenses = await financeApi.expenses();
+    expect(expenses.some((expense) => expense.id === 99999)).toBe(true);
+    expect(new Set(expenses.map((expense) => expense.id)).size).toBe(expenses.length);
   });
 });
 
-describe('dashboard', () => {
-  it('matches the FinanceDashboard schema and adds up', async () => {
+describe('backend response shapes', () => {
+  it('reads main’s ExpenseResponse', () => {
+    const result = normalizeExpense({ expense_id: 4, amount: 250, category: 'Food', description: 'Lunch', expense_date: '2026-11-10', status: 'Pending' });
+    expect(result).toMatchObject({ id: 4, category: { name: 'Food' }, amount: '250', status: STATUS.PENDING_MANAGER, ai: null, warnings: [] });
+  });
+  it('reads the ML contract’s AI view and never needs a score', () => {
+    const ai = { risk_level: 'high', reasons: [{ code: 'round_amount', text_en: 'Round amount', text_ar: 'مبلغ' }] };
+    expect(normalizeExpense({ id: 1, amount: 1, category: { id: 1, name: 'X' }, expense_date: '2026-11-01', status: 'Pending', ai }).ai).toEqual(ai);
+  });
+});
+
+describe('dashboard and AI summary', () => {
+  it('adds up', async () => {
     await login();
     const dashboard = await financeApi.dashboard();
-    expect(Object.keys(dashboard).sort()).toEqual(['approved_total', 'by_department', 'company_total', 'monthly', 'pending_total', 'rejected_total', 'remaining_budget', 'top_employees', 'total_budget']);
-    const byDepartment = dashboard.by_department.reduce((sum, entry) => sum + Number(entry.total), 0);
-    expect(byDepartment).toBeCloseTo(Number(dashboard.approved_total), 2);
-    const monthly = dashboard.monthly.reduce((sum, entry) => sum + Number(entry.total), 0);
-    expect(monthly).toBeCloseTo(Number(dashboard.approved_total), 2);
+    const byDepartment = dashboard.by_department.reduce((sum, entry) => sum + entry.total, 0);
+    expect(byDepartment).toBeCloseTo(Number(dashboard.approved_total), 1);
+  });
+  it('matches the ML contract AnomalySummary shape', async () => {
+    await login();
+    const summary = await financeApi.anomalySummary({ year: YEAR, month: MONTH });
+    expect(Object.keys(summary.counts).sort()).toEqual(['high', 'low', 'medium', 'not_scored']);
+    summary.by_department.forEach((row) => {
+      expect(row.flagged).toBeLessThanOrEqual(row.total);
+      expect(row.flagged_percent).toBeCloseTo(row.flagged / row.total * 100, 0);
+    });
+    expect(summary.by_department.map((row) => row.flagged_percent)).toEqual([...summary.by_department.map((row) => row.flagged_percent)].sort((a, b) => b - a));
+    expect(summary.top_reasons.length).toBeLessThanOrEqual(5);
+    summary.top_reasons.forEach((item) => expect(item).toEqual(expect.objectContaining({ code: expect.any(String), text_en: expect.any(String), text_ar: expect.any(String), count: expect.any(Number) })));
+    expect(JSON.stringify(summary)).not.toContain('anomaly_score');
   });
 });
 
-describe('budgets', () => {
+describe('monthly budgets', () => {
   it('creates, prevents duplicates, edits the amount, and deletes', async () => {
     await login();
-    const year = Number(today().slice(0, 4)) + 1;
-    const budget = await financeApi.createBudget({ department_id: 3, period_type: 'monthly', year, month: 2, amount: '7500' });
-    expect(budget).toMatchObject({ department_id: 3, period_type: 'monthly', year, month: 2, amount: '7500.00' });
-    await expect(financeApi.createBudget({ department_id: 3, period_type: 'monthly', year, month: 2, amount: '100' })).rejects.toMatchObject({ status: 409 });
+    const budget = await financeApi.createBudget({ department_id: 3, year: YEAR + 1, month: 2, amount: '7500' });
+    expect(budget).toEqual({ id: expect.any(Number), department_id: 3, year: YEAR + 1, month: 2, amount: '7500.00' });
+    await expect(financeApi.createBudget({ department_id: 3, year: YEAR + 1, month: 2, amount: '100' })).rejects.toMatchObject({ status: 409 });
+    await expect(financeApi.createBudget({ department_id: 3, year: YEAR + 1, month: 13, amount: '100' })).rejects.toThrow(/month/);
     expect((await financeApi.updateBudget(budget.id, '8000.50')).amount).toBe('8000.50');
-    await expect(financeApi.updateBudget(budget.id, '-1')).rejects.toThrow(/greater than zero/);
+    await expect(financeApi.updateBudget(budget.id, '-1')).rejects.toThrow(/zero or more/);
     await financeApi.deleteBudget(budget.id);
-    expect((await financeApi.budgets({ year, month: 2 })).some((entry) => entry.id === budget.id)).toBe(false);
+    expect((await financeApi.budgets({ year: YEAR + 1, month: 2 })).some((entry) => entry.id === budget.id)).toBe(false);
   });
-  it('reports usage from approved spend in the budget period only', async () => {
+  it('reports usage with the same keys as backend/finance budget_usage()', async () => {
     await login();
-    const [year, month] = today().split('-').map(Number);
-    const [budget] = await financeApi.budgets({ year, month });
+    const [budget] = await financeApi.budgets({ year: YEAR, month: MONTH });
     const usage = await financeApi.budgetUsage(budget);
-    expect(Number(usage.remaining)).toBeCloseTo(Number(usage.budget_amount) - Number(usage.spent), 2);
-    expect(usage.percent_used).toBeCloseTo(Number(usage.spent) / Number(usage.budget_amount) * 100, 0);
+    expect(Object.keys(usage).sort()).toEqual(['budget', 'percent', 'remaining', 'spent']);
+    expect(Number(usage.remaining)).toBeCloseTo(Number(usage.budget) - Number(usage.spent), 2);
+    expect(budgetUsage(50, 0).percent).toBe(0);
   });
 });
 
 describe('category limits', () => {
-  it('saves a limit, clears it, and blocks a category', async () => {
+  it('sets, changes and removes a limit', async () => {
     await login();
-    await financeApi.savePolicy(2, { is_allowed: true, max_amount: '450' });
-    expect((await financeApi.policies()).find((policy) => policy.category.id === 2)).toMatchObject({ is_allowed: true, max_amount: '450.00' });
-    await financeApi.savePolicy(2, { is_allowed: false, max_amount: '' });
-    expect((await financeApi.policies()).find((policy) => policy.category.id === 2)).toMatchObject({ is_allowed: false, max_amount: null });
-    await expect(financeApi.savePolicy(2, { is_allowed: true, max_amount: 'abc' })).rejects.toThrow(/limit/);
+    await financeApi.saveLimit(2, '450');
+    expect((await financeApi.limits()).find((entry) => entry.category_id === 2)).toMatchObject({ max_amount: '450.00' });
+    await financeApi.saveLimit(2, '500.5');
+    expect((await financeApi.limits()).filter((entry) => entry.category_id === 2)).toHaveLength(1);
+    await financeApi.saveLimit(2, '');
+    expect((await financeApi.limits()).some((entry) => entry.category_id === 2)).toBe(false);
+    await expect(financeApi.saveLimit(2, 'abc')).rejects.toThrow(/limit/);
   });
 });
 
@@ -118,36 +135,35 @@ describe('forecast', () => {
     expect(forecast.history).toHaveLength(8);
     forecast.weeks.forEach((week) => expect(new Date(`${week.week_start}T00:00:00Z`).getUTCDay()).toBe(0));
     expect(forecast.baseline_last_week).toBe(forecast.history.at(-1).actual);
-    const company = await financeApi.forecast(null);
-    expect(Number(company.weeks[0].predicted)).toBeGreaterThan(Number(forecast.weeks[0].predicted));
   });
 });
 
-describe('backend response shapes', () => {
-  it('normalizes a backend ExpenseRead and its ApprovalRead history for the pages', async () => {
-    const { normalizeExpense } = await import('./financeApi');
-    const backend = { id: 7, requester: { id: 3, username: 'sara.k', full_name: 'Sara' }, department_id: 2, category: { id: 1, name: 'Meals' }, amount: 120.5, currency: 'SAR', description: 'Lunch', expense_date: '2026-11-10', status: 'pending_finance', attachment: { id: 9, original_filename: 'r.jpg', content_type: 'image/jpeg' }, created_at: '2026-11-10T08:00:00Z' };
-    const approvals = [{ id: 1, step: 'manager', decision: 'approved', approver: { full_name: 'Khalid' }, note: null, decided_at: '2026-11-11T09:00:00Z' }];
-    const result = normalizeExpense(backend, [{ id: 2, name: 'Engineering' }], approvals);
-    expect(result.department).toEqual({ id: 2, name: 'Engineering' });
-    expect(result.attachment_url).toBeTruthy();
-    expect(result.attachment_name).toBe('r.jpg');
-    expect(result.amount).toBe('120.5');
-    expect(result.approvals[0]).toMatchObject({ actor_name: 'Khalid', decision: STATUS.PENDING_FINANCE, note: '' });
-    expect(normalizeExpense({ ...backend, attachment: null }).attachment_url).toBeNull();
-  });
-});
-
-describe('annual budgets', () => {
-  it('counts the whole year of approved spend', async () => {
+describe('QA v2 fixes', () => {
+  it('follows backend/finance amount rules', async () => {
     await login();
-    const year = Number(today().slice(0, 4));
-    const budget = await financeApi.createBudget({ department_id: 1, period_type: 'annual', year, month: 5, amount: '200000' });
-    expect(budget.month).toBeNull();
-    const monthly = (await financeApi.budgets({ year })).filter((entry) => entry.department_id === 1 && entry.period_type === 'monthly');
-    const annual = await financeApi.budgetUsage(budget);
-    const monthlySpent = await Promise.all(monthly.map((entry) => financeApi.budgetUsage(entry)));
-    expect(Number(annual.spent)).toBeGreaterThanOrEqual(monthlySpent.reduce((sum, entry) => sum + Number(entry.spent), 0));
-    expect((await financeApi.budgets({ year, month: 3 })).some((entry) => entry.id === budget.id)).toBe(true);
+    expect((await financeApi.createBudget({ department_id: 4, year: YEAR + 2, month: 1, amount: '0' })).amount).toBe('0.00');
+    await expect(financeApi.createBudget({ department_id: 4, year: YEAR + 2, month: 2, amount: '12345678901' })).rejects.toThrow(/10 digits/);
+    await expect(financeApi.createBudget({ department_id: 4, year: YEAR + 2, month: 2, amount: '10.123' })).rejects.toThrow(/2 decimals/);
+    await expect(financeApi.saveLimit(1, '0')).rejects.toThrow(/greater than zero/);
+  });
+  it('does not crash when the backend sends AI reasons as null', async () => {
+    const { normalizeExpense: normalize } = await import('./financeApi');
+    expect(normalize({ id: 5, amount: 1, category: 'Food', expense_date: today(), status: 'Pending', ai: { risk_level: 'high', reasons: null } }).ai.risk_level).toBe('high');
+  });
+});
+
+describe('final contract v0.4.3', () => {
+  it('reads the ERD columns risk_level + risk_justification', () => {
+    const reasons = [{ code: 'large_amount', text_en: 'Very large amount', text_ar: 'مبلغ كبير جداً' }];
+    expect(normalizeExpense({ id: 9, amount: 1, category: 'Travel', expense_date: today(), status: 'Pending', risk_level: 'medium', risk_justification: reasons }).ai).toEqual({ risk_level: 'medium', reasons });
+    expect(normalizeExpense({ id: 9, amount: 1, category: 'Travel', expense_date: today(), status: 'Pending', risk_level: null }).ai).toBeNull();
+  });
+  it('uses only the 10 final reason codes with the final texts', async () => {
+    const { AI_REASONS } = await import('./financeMock');
+    expect(Object.keys(AI_REASONS)).toHaveLength(10);
+    expect(AI_REASONS.amount_high_for_department[0]).toBe('Amount is much higher than usual for this department in this category');
+    await login();
+    const summary = await financeApi.anomalySummary({ year: YEAR, month: MONTH });
+    summary.top_reasons.forEach((item) => expect(AI_REASONS[item.code][0]).toBe(item.text_en));
   });
 });

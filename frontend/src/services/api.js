@@ -60,8 +60,7 @@ export function writeData(data) {
 function assertView(user, expense) {
   const own = expense.requester.id === user.id && hasPermission(user, PERMISSIONS.OWN);
   const department = expense.department.id === user.department_id && hasPermission(user, PERMISSIONS.DEPARTMENT);
-  const finance = hasPermission(user, PERMISSIONS.FINANCE);
-  if (!own && !department && !finance) throw new ApiError('You do not have access to this expense.', 403);
+  if (!own && !department) throw new ApiError('You do not have access to this expense.', 403);
 }
 function assertEditable(user, expense) {
   if (expense.requester.id !== user.id || !hasPermission(user, PERMISSIONS.OWN)) throw new ApiError('Only the requester can change this expense.', 403);

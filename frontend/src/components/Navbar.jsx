@@ -1,9 +1,8 @@
-import { ArrowUpRight, Building2, ChevronDown, History, Inbox, LayoutDashboard, LogOut, Plus, ReceiptText, SlidersHorizontal, TrendingUp, Wallet } from 'lucide-react';
+import { ArrowUpRight, Building2, ChevronDown, LayoutDashboard, LogOut, Plus, ReceiptText, SlidersHorizontal, TrendingUp, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api, USE_MOCK } from '../services/api';
-import { financeApi } from '../services/financeApi';
 import { canUseFinance, hasPermission, PERMISSIONS, STATUS } from '../utils/constants';
 import { formatDate, initials } from '../utils/formatters';
 
@@ -19,6 +18,7 @@ export default function Navbar() {
   const area = pathname.startsWith('/manager') ? 'manager' : pathname.startsWith('/finance') ? 'finance' : 'employee';
   const views = [hasPermission(user, PERMISSIONS.OWN) && ['employee', 'Employee workspace'], hasPermission(user, PERMISSIONS.DEPARTMENT) && ['manager', 'Manager workspace'], canUseFinance(user) && ['finance', 'Finance workspace']].filter(Boolean);
   useEffect(() => {
+    if (area === 'finance') return;
     let active = true;
     let inFlight = false;
     setPending(null);
@@ -26,7 +26,6 @@ export default function Navbar() {
       if (inFlight || document.hidden) return;
       inFlight = true;
       try {
-        if (area === 'finance') { const queue = await financeApi.queue(); if (active) setPending(queue.length); return; }
         const expenses = await api.allExpenses({ view: area === 'manager' ? 'department' : 'own' });
         const count = expenses.filter((expense) => area === 'manager'
           ? expense.status === STATUS.PENDING_MANAGER && expense.requester?.id !== user.id
@@ -42,7 +41,7 @@ export default function Navbar() {
     return () => { active = false; window.clearInterval(interval); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, [area, pathname, user.id]);
   const links = area === 'manager' ? [{ to: '/manager/dashboard', label: 'Department overview', Icon: LayoutDashboard, pending: true }]
-    : area === 'finance' ? [{ to: '/finance/dashboard', label: 'Overview', Icon: LayoutDashboard }, { to: '/finance/queue', label: 'Payout queue', Icon: Inbox, pending: true }, { to: '/finance/history', label: 'History', Icon: History }, { to: '/finance/budgets', label: 'Budgets', Icon: Wallet }, { to: '/finance/limits', label: 'Category limits', Icon: SlidersHorizontal }, { to: '/finance/forecast', label: 'Forecast', Icon: TrendingUp }]
+    : area === 'finance' ? [{ to: '/finance/dashboard', label: 'Overview', Icon: LayoutDashboard }, { to: '/finance/budgets', label: 'Budgets', Icon: Wallet }, { to: '/finance/limits', label: 'Category limits', Icon: SlidersHorizontal }, { to: '/finance/forecast', label: 'Forecast', Icon: TrendingUp }]
       : [{ to: '/employee/dashboard', label: 'Overview', Icon: LayoutDashboard }, { to: '/employee/expenses', label: 'My expenses', Icon: ReceiptText, pending: true }, { to: '/employee/expenses/new', label: 'New expense', Icon: Plus }];
   return <div className="workspace-shell">
     <a href="#main-content" className="skip-link">Skip to content</a>
