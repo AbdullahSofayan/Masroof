@@ -73,12 +73,10 @@ function MoneyTooltip({ active, payload, label }) {
 
 /** Approved spend per month; the current month is highlighted. */
 export function MonthlySpendChart({ monthly, months = 6 }) {
-  const data = monthly
-    .slice(-months)
-    .map((entry) => ({
-      label: monthName(entry.year, entry.month),
-      total: Number(entry.total),
-    }));
+  const data = monthly.slice(-months).map((entry) => ({
+    label: monthName(entry.year, entry.month),
+    total: Number(entry.total),
+  }));
   return (
     <figure>
       <div

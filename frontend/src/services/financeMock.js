@@ -6,7 +6,7 @@ import { CURRENCY, STATUS } from "../utils/constants";
 import { demoCategories, department as engineering } from "./mockData";
 
 export const FINANCE_STORAGE_KEY = "masroof.finance.v2";
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 export const COMPANY_SEED_START_ID = 1000;
 
 export const financeDepartments = [
@@ -161,12 +161,12 @@ export function createCompanyExpenses(endDate) {
       // One approval step: the department manager approves or rejects.
       const status =
         age <= 6
-          ? STATUS.PENDING_MANAGER
+          ? STATUS.PENDING
           : roll < 0.08
             ? STATUS.REJECTED
             : STATUS.APPROVED;
       const approvals =
-        status === STATUS.PENDING_MANAGER
+        status === STATUS.PENDING
           ? []
           : [
               {
@@ -270,7 +270,7 @@ export function createFinanceSettings(currentDay) {
       max_amount: maxAmount,
     }),
   );
-  return { budgets, limits: expenseLimits };
+  return { schema_version: 2, budgets, limits: expenseLimits };
 }
 
 // Weekly totals per department in SAR, shaped like the output of ml/notebooks/forecasting.ipynb

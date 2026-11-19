@@ -1,22 +1,12 @@
 export const STATUS = Object.freeze({
-  PENDING_MANAGER: "pending_manager",
-  NEEDS_CHANGES: "needs_changes",
-  PENDING_FINANCE: "pending_finance",
+  PENDING: "pending",
   APPROVED: "approved",
   REJECTED: "rejected",
 });
 export const STATUS_META = {
-  [STATUS.PENDING_MANAGER]: {
-    label: "Pending manager",
+  [STATUS.PENDING]: {
+    label: "Pending",
     className: "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  [STATUS.PENDING_FINANCE]: {
-    label: "Pending finance",
-    className: "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  [STATUS.NEEDS_CHANGES]: {
-    label: "Needs changes",
-    className: "bg-orange-50 text-orange-700 border-orange-200",
   },
   [STATUS.APPROVED]: {
     label: "Approved",
@@ -32,21 +22,30 @@ export const PERMISSIONS = {
   DEPARTMENT: "expenses.view_department",
   FINANCE: "expenses.view_all",
 };
-export const EDITABLE_STATUSES = [STATUS.PENDING_MANAGER, STATUS.NEEDS_CHANGES];
+export const EDITABLE_STATUSES = [STATUS.PENDING];
 export const DECISION = {
   APPROVE: "approve",
   REJECT: "reject",
-  REQUEST_CHANGES: "request-changes",
 };
 export const DECISION_STATUS = {
-  [DECISION.APPROVE]: STATUS.PENDING_FINANCE,
+  [DECISION.APPROVE]: STATUS.APPROVED,
   [DECISION.REJECT]: STATUS.REJECTED,
-  [DECISION.REQUEST_CHANGES]: STATUS.NEEDS_CHANGES,
 };
-export const DECISIONS_REQUIRING_NOTE = [
-  DECISION.REJECT,
-  DECISION.REQUEST_CHANGES,
-];
+export const DECISIONS_REQUIRING_NOTE = [DECISION.REJECT];
+export const CATEGORIES = Object.freeze([
+  "Food",
+  "Travel",
+  "Transportation",
+  "Office Supplies",
+  "IT & Telecom",
+  "Equipment & Maintenance",
+]);
+export const ROLE_PERMISSIONS = Object.freeze({
+  employee: [PERMISSIONS.OWN],
+  manager: [PERMISSIONS.OWN, PERMISSIONS.DEPARTMENT],
+  finance: [PERMISSIONS.FINANCE],
+  admin: [PERMISSIONS.OWN, PERMISSIONS.DEPARTMENT, PERMISSIONS.FINANCE],
+});
 export const CURRENCY = "SAR";
 export const TIME_ZONE = "Asia/Riyadh";
 export const PAGE_SIZE = 6;
@@ -61,21 +60,19 @@ export const ALLOWED_FILE_TYPES = [
 export const FILE_ACCEPT = ".jpg,.jpeg,.png,.pdf";
 export const DESCRIPTION_MAX_LENGTH = 2000;
 export const NOTE_MAX_LENGTH = 2000;
-export const STORAGE_KEYS = { TOKEN: "masroof.token", DATA: "masroof.demo.v1" };
+export const STORAGE_KEYS = { TOKEN: "masroof.token", DATA: "masroof.demo.v2" };
 export const SESSION_EXPIRED_EVENT = "masroof:session-expired";
 export const MOCK_DELAY = 180;
 export function hasPermission(user, permission) {
-  return Boolean(user?.is_superuser || user?.permissions?.includes(permission));
+  return Boolean(ROLE_PERMISSIONS[user?.role]?.includes(permission));
 }
 export function canUseFinance(user) {
-  return Boolean(
-    user?.role === "finance_admin" || hasPermission(user, PERMISSIONS.FINANCE),
-  );
+  return hasPermission(user, PERMISSIONS.FINANCE);
 }
 export function homeFor(user) {
+  if (canUseFinance(user)) return "/finance/dashboard";
   if (hasPermission(user, PERMISSIONS.DEPARTMENT)) return "/manager/dashboard";
   if (hasPermission(user, PERMISSIONS.OWN)) return "/employee/dashboard";
-  if (canUseFinance(user)) return "/finance/dashboard";
   return "/access-denied";
 }
 export function validateReceipt(file) {

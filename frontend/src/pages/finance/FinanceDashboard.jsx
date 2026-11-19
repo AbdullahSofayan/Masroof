@@ -67,7 +67,7 @@ export default function FinanceDashboard() {
     amount: Number(entry.total),
   }));
   const pendingCount = dashboard.expenses.filter(
-    (expense) => expense.status === STATUS.PENDING_MANAGER,
+    (expense) => expense.status === STATUS.PENDING,
   ).length;
   return (
     <div className="dashboard-bento">

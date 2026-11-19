@@ -41,18 +41,15 @@ describe("one approval step", () => {
     );
     expect(
       [...statuses].every((status) =>
-        [STATUS.PENDING_MANAGER, STATUS.APPROVED, STATUS.REJECTED].includes(
-          status,
-        ),
+        [STATUS.PENDING, STATUS.APPROVED, STATUS.REJECTED].includes(status),
       ),
     ).toBe(true);
   });
   it("treats a manager approval as final", () => {
-    expect(effectiveStatus(STATUS.PENDING_FINANCE)).toBe(STATUS.APPROVED);
+    expect(effectiveStatus(STATUS.APPROVED)).toBe(STATUS.APPROVED);
     expect(effectiveStatus("Approved")).toBe(STATUS.APPROVED);
     expect(effectiveStatus("Rejected")).toBe(STATUS.REJECTED);
-    expect(effectiveStatus("Pending")).toBe(STATUS.PENDING_MANAGER);
-    expect(effectiveStatus(STATUS.NEEDS_CHANGES)).toBe(STATUS.PENDING_MANAGER);
+    expect(effectiveStatus("Pending")).toBe(STATUS.PENDING);
   });
   it("counts an expense the manager approves in the demo", async () => {
     await login("khalid");
@@ -66,7 +63,7 @@ describe("one approval step", () => {
   it("keeps expenses employees created when demo data is refreshed", async () => {
     await login();
     await financeApi.expenses();
-    const data = JSON.parse(storage.get("masroof.demo.v1"));
+    const data = JSON.parse(storage.get("masroof.demo.v2"));
     data.push({
       ...data[0],
       id: 99999,
@@ -76,7 +73,7 @@ describe("one approval step", () => {
     data.forEach((entry) => {
       if (entry.seed_version) entry.seed_version = 1;
     });
-    storage.set("masroof.demo.v1", JSON.stringify(data));
+    storage.set("masroof.demo.v2", JSON.stringify(data));
     const expenses = await financeApi.expenses();
     expect(expenses.some((expense) => expense.id === 99999)).toBe(true);
     expect(new Set(expenses.map((expense) => expense.id)).size).toBe(
@@ -99,7 +96,7 @@ describe("backend response shapes", () => {
       id: 4,
       category: { name: "Food" },
       amount: "250",
-      status: STATUS.PENDING_MANAGER,
+      status: STATUS.PENDING,
       ai: null,
       warnings: [],
     });

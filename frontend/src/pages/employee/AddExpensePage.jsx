@@ -21,7 +21,6 @@ import {
   EDITABLE_STATUSES,
   FILE_ACCEPT,
   FILE_SIZE_LABEL,
-  STATUS,
   validateReceipt,
 } from "../../utils/constants";
 import { today } from "../../utils/formatters";
@@ -84,10 +83,9 @@ export default function AddExpensePage() {
     return (
       <>
         <BackLink to="/employee/expenses">My expenses</BackLink>
-        <ErrorBox message="This request cannot be edited. Only your pending or returned expenses can be changed." />
+        <ErrorBox message="This request cannot be edited. Only your pending expenses can be changed." />
       </>
     );
-  const needsChanges = expense?.status === STATUS.NEEDS_CHANGES;
   const setField = (event) =>
     setForm((previous) => ({
       ...previous,
@@ -123,7 +121,6 @@ export default function AddExpensePage() {
   async function save(event) {
     event.preventDefault();
     setError("");
-    const resubmit = event.nativeEvent.submitter?.value === "resubmit";
     if ((file || !expense?.attachment_url) && validateReceipt(file)) {
       setError(validateReceipt(file));
       return;
@@ -151,13 +148,10 @@ export default function AddExpensePage() {
       currentId = result.id;
       setSavedId(result.id);
       if (file) await api.uploadReceipt(result.id, file);
-      if (resubmit) await api.resubmitExpense(result.id);
       notify(
-        resubmit
-          ? "Expense updated and resubmitted."
-          : id
-            ? "Your changes have been saved."
-            : "Expense submitted for manager review.",
+        id
+          ? "Your changes have been saved."
+          : "Expense submitted for manager review.",
       );
       navigate(`/employee/expenses?expense=${result.id}`);
     } catch (err) {
@@ -178,7 +172,7 @@ export default function AddExpensePage() {
         title={id ? "Update your expense" : "Submit a new expense"}
         description={
           id
-            ? "Update the details and receipt, then send it back for review."
+            ? "Update the details and receipt while awaiting review."
             : "Add the details below. Your manager will take it from here."
         }
       />
@@ -265,7 +259,6 @@ export default function AddExpensePage() {
                 {initial.data.categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
-                    {category.name_ar ? ` · ${category.name_ar}` : ""}
                   </option>
                 ))}
               </select>
@@ -361,16 +354,7 @@ export default function AddExpensePage() {
               >
                 Cancel
               </Link>
-              {needsChanges && (
-                <button className="btn-secondary" type="submit" value="save">
-                  Save changes
-                </button>
-              )}
-              <button
-                className="btn-primary"
-                type="submit"
-                value={needsChanges ? "resubmit" : "save"}
-              >
+              <button className="btn-primary" type="submit" value="save">
                 {busy ? (
                   <LoaderCircle size={16} className="animate-spin" />
                 ) : (
@@ -378,11 +362,9 @@ export default function AddExpensePage() {
                 )}
                 {busy
                   ? "Saving expense…"
-                  : needsChanges
-                    ? "Save & resubmit"
-                    : id
-                      ? "Save changes"
-                      : "Submit expense"}
+                  : id
+                    ? "Save changes"
+                    : "Submit expense"}
               </button>
             </div>
           </fieldset>
@@ -397,7 +379,6 @@ export default function AddExpensePage() {
               "Add the amount and business purpose.",
               "Attach one readable receipt.",
               "Your manager reviews the request.",
-              "Finance completes final approval.",
             ].map((text, index) => (
               <li
                 className="flex gap-3 text-sm leading-6 text-slate-500"

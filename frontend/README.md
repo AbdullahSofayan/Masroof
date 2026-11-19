@@ -24,7 +24,7 @@ npm run preview
 
 ## Demo accounts
 
-`USE_MOCK = true` in `src/services/api.js`. The login page offers one-click Employee and Manager demos. All accounts use the password `Masroof123!`; usernames or the listed email addresses both work.
+`USE_MOCK = true` in `src/services/api.js`. All accounts use the password `Masroof123!`; usernames or the listed email addresses both work.
 
 | Username | Email | Workspace |
 | --- | --- | --- |

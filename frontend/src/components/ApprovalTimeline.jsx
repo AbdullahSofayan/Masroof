@@ -1,12 +1,10 @@
-import { Check, RotateCcw, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { DECISION, STATUS, STATUS_META } from "../utils/constants";
 import { formatDate } from "../utils/formatters";
 
 function timelineBadge(decision) {
   if ([STATUS.REJECTED, DECISION.REJECT].includes(decision))
     return { Icon: X, className: "bg-rose-50 text-rose-600" };
-  if ([STATUS.NEEDS_CHANGES, DECISION.REQUEST_CHANGES].includes(decision))
-    return { Icon: RotateCcw, className: "bg-amber-50 text-amber-600" };
   return { Icon: Check, className: "bg-emerald-50 text-emerald-600" };
 }
 

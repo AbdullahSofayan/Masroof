@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import "fake-indexeddb/auto";
 import {
   CURRENCY,
+  CATEGORIES,
   DECISION,
   MAX_FILE_SIZE,
   STATUS,
@@ -17,7 +18,7 @@ vi.stubGlobal("localStorage", {
   removeItem: (key) => storage.delete(key),
 });
 vi.stubGlobal("window", new EventTarget());
-const { api, getToken } = await import("./api");
+const { api, getToken, readData, requestLogin } = await import("./api");
 const login = (username = "sara") => api.login(username, DEMO_PASSWORD);
 const payload = {
   amount: "245.50",
@@ -31,6 +32,39 @@ beforeEach(() => {
   api.logout();
 });
 describe("authentication and permission scoping", () => {
+  it("sends real login credentials as JSON", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ access_token: "server-token" }),
+    });
+    try {
+      await requestLogin("sara", "password");
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toMatch(/\/auth\/login$/);
+      expect(options.method).toBe("POST");
+      expect(options.headers.get("Content-Type")).toBe("application/json");
+      expect(options.body).toBe(
+        JSON.stringify({ username: "sara", password: "password" }),
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+  it("offers exactly the six standard expense categories", async () => {
+    await login();
+    expect((await api.categories()).map((category) => category.name)).toEqual([
+      "Food",
+      "Travel",
+      "Transportation",
+      "Office Supplies",
+      "IT & Telecom",
+      "Equipment & Maintenance",
+    ]);
+    expect(new Set(readData().map((expense) => expense.category.name))).toEqual(
+      new Set(CATEGORIES),
+    );
+  });
   it("requires valid credentials, returns the profile, and clears the session on logout", async () => {
     await expect(api.login("sara", "incorrect")).rejects.toMatchObject({
       status: 401,
@@ -60,14 +94,13 @@ describe("authentication and permission scoping", () => {
     await login("khalid");
     const own = await api.allExpenses({ view: "own" });
     expect(own.every((entry) => entry.requester.id === 8)).toBe(true);
-    const queue = await api.listExpenses({ status: STATUS.PENDING_MANAGER });
+    const queue = await api.listExpenses({ status: STATUS.PENDING });
     expect(
       queue.items.every(
-        (entry) =>
-          entry.status === STATUS.PENDING_MANAGER && entry.department.id === 2,
+        (entry) => entry.status === STATUS.PENDING && entry.department.id === 2,
       ),
     ).toBe(true);
-    expect(queue.total).toBe(5);
+    expect(queue.total).toBe(6);
     await expect(
       api.updateExpense(101, { description: "Manager edit" }),
     ).rejects.toMatchObject({ status: 403 });
@@ -89,7 +122,7 @@ describe("employee submission and receipts", () => {
     await login();
     const created = await api.createExpense(payload);
     expect(created).toMatchObject({
-      status: STATUS.PENDING_MANAGER,
+      status: STATUS.PENDING,
       amount: "245.50",
       currency: CURRENCY,
       ai_analysis: null,
@@ -140,27 +173,24 @@ describe("employee submission and receipts", () => {
       validateReceipt({ type: "application/pdf", size: MAX_FILE_SIZE }),
     ).toBe("");
   });
-  it("does not allow changing or deleting approved or finance-pending requests", async () => {
+  it("does not allow changing or deleting approved requests", async () => {
     await login();
     await expect(api.updateExpense(105, payload)).rejects.toMatchObject({
       status: 409,
     });
     await expect(api.deleteExpense(106)).rejects.toMatchObject({ status: 409 });
-    await expect(api.resubmitExpense(101)).rejects.toMatchObject({
-      status: 409,
-    });
   });
 });
 describe("manager decisions and append-only approval history", () => {
-  it.each([DECISION.REJECT, DECISION.REQUEST_CHANGES])(
+  it.each([DECISION.REJECT])(
     "requires a nonblank note for %s",
     async (decision) => {
       await login("khalid");
       await expect(api.decide(101, decision, "  ")).rejects.toThrow(/note/);
-      expect((await api.getExpense(101)).status).toBe(STATUS.PENDING_MANAGER);
+      expect((await api.getExpense(101)).status).toBe(STATUS.PENDING);
     },
   );
-  it("approves once, transfers to Finance and preserves existing history", async () => {
+  it("approves once as the final decision and preserves existing history", async () => {
     await login("khalid");
     const before = await api.getExpense(101);
     const after = await api.decide(
@@ -168,38 +198,38 @@ describe("manager decisions and append-only approval history", () => {
       DECISION.APPROVE,
       "  Receipt verified.  ",
     );
-    expect(after.status).toBe(STATUS.PENDING_FINANCE);
+    expect(after.status).toBe(STATUS.APPROVED);
     expect(after.approvals.slice(0, before.approvals.length)).toEqual(
       before.approvals,
     );
     expect(after.approvals.at(-1)).toMatchObject({
-      decision: STATUS.PENDING_FINANCE,
+      decision: STATUS.APPROVED,
       note: "Receipt verified.",
     });
     await expect(
       api.decide(101, DECISION.REJECT, "Already reviewed"),
     ).rejects.toMatchObject({ status: 409 });
   });
-  it("supports the full request-changes, edit, resubmit and rejection workflow across sessions", async () => {
-    await login("khalid");
-    await api.decide(101, DECISION.REQUEST_CHANGES, "يرجى توضيح تفاصيل الرحلة");
+  it("allows editing while pending and makes rejection final across sessions", async () => {
     await login();
-    expect((await api.getExpense(101)).status).toBe(STATUS.NEEDS_CHANGES);
-    await api.updateExpense(101, {
-      description: "اجتماع عمل مع العميل في جدة",
+    const edited = await api.updateExpense(101, {
+      description: "Updated business trip",
     });
-    const returned = await api.resubmitExpense(101);
-    expect(returned.status).toBe(STATUS.PENDING_MANAGER);
-    expect(returned.ai_analysis).toBeNull();
-    expect(returned.approvals).toHaveLength(3);
+    expect(edited.status).toBe(STATUS.PENDING);
+    expect(edited.ai_analysis).toBeNull();
     await login("khalid");
-    const rejected = await api.decide(101, DECISION.REJECT, "الطلب مكرر");
+    const rejected = await api.decide(
+      101,
+      DECISION.REJECT,
+      "Duplicate request",
+    );
     expect(rejected.status).toBe(STATUS.REJECTED);
-    expect(rejected.approvals).toHaveLength(4);
+    expect(rejected.approvals).toHaveLength(1);
     await login();
     await expect(api.updateExpense(101, payload)).rejects.toMatchObject({
       status: 409,
     });
+    await expect(api.deleteExpense(101)).rejects.toMatchObject({ status: 409 });
   });
   it("prevents an employee from deciding and a manager from approving their own request", async () => {
     await login();

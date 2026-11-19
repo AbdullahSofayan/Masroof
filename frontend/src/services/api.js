@@ -15,6 +15,7 @@ import {
   validateReceipt,
 } from "../utils/constants";
 import { today } from "../utils/formatters";
+import { LEGACY_DATA_KEY, migrateDemoData } from "./demoMigration";
 import {
   createDemoData,
   demoCategories,
@@ -99,11 +100,13 @@ export function actor() {
   return user;
 }
 export function readData() {
-  const stored = localStorage.getItem(STORAGE_KEYS.DATA);
+  const current = localStorage.getItem(STORAGE_KEYS.DATA);
+  const stored = current ?? localStorage.getItem(LEGACY_DATA_KEY);
   if (!stored) return createDemoData();
   try {
     const result = JSON.parse(stored);
-    if (Array.isArray(result)) return result;
+    if (Array.isArray(result))
+      return current ? result : migrateDemoData(result);
   } catch {
     /* Recover invalid demo storage. */
   }
@@ -204,6 +207,13 @@ async function receiptStore(mode, action) {
     db.close();
   }
 }
+export function requestLogin(username, password) {
+  return request("/auth/login", {
+    method: "POST",
+    body: { username, password },
+  });
+}
+
 export const api = {
   async login(username, password) {
     let result;
@@ -216,11 +226,7 @@ export const api = {
       if (!user || password !== DEMO_PASSWORD)
         throw new ApiError("The username or password is incorrect.", 401);
       result = { access_token: `demo-token-${user.id}`, token_type: "bearer" };
-    } else
-      result = await request("/auth/login", {
-        method: "POST",
-        body: new URLSearchParams({ username, password }),
-      });
+    } else result = await requestLogin(username, password);
     setToken(result.access_token);
     try {
       return await api.me();
@@ -335,7 +341,7 @@ export const api = {
       currency: CURRENCY,
       description: payload.description.trim(),
       expense_date: payload.expense_date,
-      status: STATUS.PENDING_MANAGER,
+      status: STATUS.PENDING,
       attachment_url: null,
       ai_analysis: null,
       approvals: [],
@@ -379,26 +385,6 @@ export const api = {
       await receiptStore("readwrite", (store) => store.delete(Number(id)));
     writeData(data.filter((entry) => entry.id !== Number(id)));
     return null;
-  },
-  async resubmitExpense(id) {
-    if (!USE_MOCK)
-      return request(`/expenses/${id}/resubmit`, { method: "POST" });
-    await sleep();
-    const data = readData();
-    const expense = findExpense(data, id);
-    assertEditable(actor(), expense);
-    if (expense.status !== STATUS.NEEDS_CHANGES)
-      throw new ApiError("Only returned expenses can be resubmitted.", 409);
-    if (!expense.attachment_url)
-      throw new ApiError("Attach a receipt before resubmitting.");
-    expense.status = STATUS.PENDING_MANAGER;
-    audit(
-      expense,
-      STATUS.PENDING_MANAGER,
-      "Updated and resubmitted for manager review.",
-    );
-    writeData(data);
-    return structuredClone(expense);
   },
   async uploadReceipt(id, file) {
     const error = validateReceipt(file);
@@ -499,7 +485,7 @@ export const api = {
         "Your own expenses must be reviewed by another manager.",
         403,
       );
-    if (expense.status !== STATUS.PENDING_MANAGER)
+    if (expense.status !== STATUS.PENDING)
       throw new ApiError(
         "This request has already left the manager queue. Refresh to see its latest status.",
         409,

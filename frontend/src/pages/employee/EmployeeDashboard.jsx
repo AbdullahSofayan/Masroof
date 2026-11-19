@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpRight, Plus, X } from "lucide-react";
+import { ArrowUpRight, Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import CategoryExposureCard, {
@@ -36,7 +36,6 @@ export default function EmployeeDashboard() {
   );
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} retry={reload} />;
-  const changes = data.filter((entry) => entry.status === STATUS.NEEDS_CHANGES);
   const spendExpenses = data.filter(
     (entry) => entry.status !== STATUS.REJECTED,
   );
@@ -105,28 +104,6 @@ export default function EmployeeDashboard() {
         >
           <section className="card bento-panel flex h-full flex-col justify-between">
             <SpendSparkline expenses={data} />
-            {changes.length > 0 && (
-              <Link
-                to={`/employee/expenses?status=${STATUS.NEEDS_CHANGES}`}
-                className="mt-5 flex items-center gap-3 rounded-2xl border border-zinc-100 bg-[#F6F6F4] p-4"
-              >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold tabular-nums text-zinc-700">
-                  {changes.length}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-zinc-800">
-                    A quick update is needed
-                  </p>
-                  <p className="mt-1 text-[10px] leading-4 text-zinc-500">
-                    Review your manager’s note and resubmit.
-                  </p>
-                </div>
-                <ArrowRight
-                  size={16}
-                  className="ml-auto shrink-0 text-zinc-500"
-                />
-              </Link>
-            )}
           </section>
         </AnimatedContent>
         <AnimatedContent

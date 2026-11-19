@@ -25,7 +25,7 @@ import { useAsync } from "../../utils/useAsync";
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
-  const [status, setStatus] = useState(STATUS.PENDING_MANAGER);
+  const [status, setStatus] = useState(STATUS.PENDING);
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState(null);
   const ledgerRef = useRef(null);
@@ -40,9 +40,7 @@ export default function ManagerDashboard() {
   const spendExpenses = data.filter(
     (entry) => entry.status !== STATUS.REJECTED,
   );
-  const queue = reviewable.filter(
-    (entry) => entry.status === STATUS.PENDING_MANAGER,
-  );
+  const queue = reviewable.filter((entry) => entry.status === STATUS.PENDING);
   const categoryExpenses = category
     ? reviewable.filter((entry) => expenseCategoryKey(entry) === category.key)
     : reviewable;
@@ -195,7 +193,7 @@ export default function ManagerDashboard() {
               activePage * PAGE_SIZE,
             )}
             emptyTitle={
-              status === STATUS.PENDING_MANAGER
+              status === STATUS.PENDING
                 ? "No pending requests"
                 : "No matching expenses"
             }

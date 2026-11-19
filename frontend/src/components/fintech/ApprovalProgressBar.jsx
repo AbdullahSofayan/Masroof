@@ -1,41 +1,19 @@
-import { Check, RotateCcw, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { motion } from "motion/react";
 import { STATUS } from "../../utils/constants";
 import { useFintechMotion } from "./useFintechMotion";
 
-const STEPS = ["Submitted", "Manager Review", "Finance Review", "Approved"];
-export function approvalStage(status, approvals = []) {
-  if (status === STATUS.APPROVED) return 3;
-  if (status === STATUS.PENDING_FINANCE) return 2;
-  if (
-    status === STATUS.REJECTED &&
-    approvals.some((entry) => entry.decision === STATUS.PENDING_FINANCE)
-  )
-    return 2;
-  if (
-    [STATUS.PENDING_MANAGER, STATUS.NEEDS_CHANGES, STATUS.REJECTED].includes(
-      status,
-    )
-  )
-    return 1;
-  return 0;
+const STEPS = ["Submitted", "Pending", "Approved"];
+export function approvalStage(status) {
+  if (status === STATUS.APPROVED || status === STATUS.REJECTED) return 2;
+  return status === STATUS.PENDING ? 1 : 0;
 }
 
-export default function ApprovalProgressBar({
-  status,
-  approvals = [],
-  className = "",
-}) {
+export default function ApprovalProgressBar({ status, className = "" }) {
   const { enabled } = useFintechMotion();
-  const active = approvalStage(status, approvals);
-  const changes = status === STATUS.NEEDS_CHANGES;
+  const active = approvalStage(status);
   const rejected = status === STATUS.REJECTED;
-  const branch = changes || rejected;
-  const fill = rejected
-    ? "bg-rose-500"
-    : changes
-      ? "bg-amber-500"
-      : "bg-emerald-600";
+  const fill = rejected ? "bg-rose-500" : "bg-emerald-600";
   const width = `${(active / (STEPS.length - 1)) * 100}%`;
   const Fill = enabled ? motion.div : "div";
   return (
@@ -46,7 +24,7 @@ export default function ApprovalProgressBar({
       <div className="relative">
         <div
           aria-hidden="true"
-          className="absolute top-4 right-[12.5%] left-[12.5%] h-0.5 overflow-hidden bg-slate-100"
+          className="absolute top-4 right-[16.6667%] left-[16.6667%] h-0.5 overflow-hidden bg-slate-100"
         >
           <Fill
             className={`h-full ${fill}`}
@@ -60,15 +38,14 @@ export default function ApprovalProgressBar({
               : {})}
           />
         </div>
-        <ol className="relative grid grid-cols-4 gap-1">
-          {STEPS.map((label, index) => {
+        <ol className="relative grid grid-cols-3 gap-1">
+          {STEPS.map((step, index) => {
+            const label = rejected && index === 2 ? "Rejected" : step;
             const completed = index < active || status === STATUS.APPROVED;
             const current = index === active;
             const color =
-              current && branch
-                ? rejected
-                  ? "bg-rose-500 text-white ring-4 ring-rose-500/15"
-                  : "bg-amber-500 text-white ring-4 ring-amber-500/15"
+              current && rejected
+                ? "bg-rose-500 text-white ring-4 ring-rose-500/15"
                 : completed
                   ? "bg-emerald-600 text-white"
                   : current
@@ -85,8 +62,6 @@ export default function ApprovalProgressBar({
                 >
                   {current && rejected ? (
                     <X size={15} aria-hidden="true" />
-                  ) : current && changes ? (
-                    <RotateCcw size={14} aria-hidden="true" />
                   ) : completed ? (
                     <Check size={15} aria-hidden="true" />
                   ) : (
@@ -103,14 +78,12 @@ export default function ApprovalProgressBar({
           })}
         </ol>
       </div>
-      {branch && (
+      {rejected && (
         <p
           role="status"
-          className={`mt-4 rounded-lg px-3 py-2 text-center text-xs ${rejected ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}
+          className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-center text-xs text-rose-700"
         >
-          {changes
-            ? "Needs Changes · Returned to the requester for an update."
-            : "Rejected · This request will not continue to approval."}
+          {"Rejected · This request will not continue to approval."}
         </p>
       )}
     </section>

@@ -1,4 +1,4 @@
-import { Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ApprovalTimeline from "../../components/ApprovalTimeline";
@@ -20,7 +20,6 @@ import { api } from "../../services/api";
 import {
   EDITABLE_STATUSES,
   PAGE_SIZE,
-  STATUS,
   STATUS_META,
 } from "../../utils/constants";
 import { useAsync } from "../../utils/useAsync";
@@ -33,20 +32,13 @@ function ExpenseDrawer({ id, onClose, onChanged }) {
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const expense = detail.data;
-  async function mutate(action) {
+  async function mutate() {
     setBusy(true);
     setError("");
     try {
-      if (action === "delete") {
-        await api.deleteExpense(id);
-        notify("Expense deleted.");
-        onChanged("delete");
-      } else {
-        await api.resubmitExpense(id);
-        notify("Expense resubmitted for manager review.");
-        onChanged();
-        detail.reload();
-      }
+      await api.deleteExpense(id);
+      notify("Expense deleted.");
+      onChanged("delete");
     } catch (err) {
       setError(err.message);
       if (err.status === 409) detail.reload();
@@ -74,9 +66,7 @@ function ExpenseDrawer({ id, onClose, onChanged }) {
           {editable && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="mb-3 text-sm text-slate-600">
-                {expense.status === STATUS.NEEDS_CHANGES
-                  ? "Review the note below before updating your request."
-                  : "You can update this request while it awaits manager review."}
+                You can update this request while it awaits manager review.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -86,16 +76,6 @@ function ExpenseDrawer({ id, onClose, onChanged }) {
                   <Pencil size={15} />
                   Edit expense
                 </Link>
-                {expense.status === STATUS.NEEDS_CHANGES && (
-                  <button
-                    disabled={busy}
-                    className="btn-primary"
-                    onClick={() => mutate("resubmit")}
-                  >
-                    <Send size={15} />
-                    Resubmit
-                  </button>
-                )}
                 <button
                   className="btn-danger"
                   disabled={busy}
@@ -114,7 +94,7 @@ function ExpenseDrawer({ id, onClose, onChanged }) {
                     <button
                       className="btn-danger"
                       disabled={busy}
-                      onClick={() => mutate("delete")}
+                      onClick={() => mutate()}
                     >
                       {busy ? "Deleting…" : "Yes, delete expense"}
                     </button>

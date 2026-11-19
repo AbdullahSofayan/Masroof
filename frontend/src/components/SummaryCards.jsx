@@ -35,11 +35,11 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
   const approved = visibleExpenses.filter(
     (expense) => expense.status === STATUS.APPROVED,
   );
-  const pending = visibleExpenses.filter((expense) =>
-    [STATUS.PENDING_MANAGER, STATUS.PENDING_FINANCE].includes(expense.status),
+  const pending = visibleExpenses.filter(
+    (expense) => expense.status === STATUS.PENDING,
   );
-  const changes = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.NEEDS_CHANGES,
+  const rejected = visibleExpenses.filter(
+    (expense) => expense.status === STATUS.REJECTED,
   );
   const total = sum(
     visibleExpenses.filter((expense) => expense.status !== STATUS.REJECTED),
@@ -49,16 +49,11 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
   const segments = [
     { label: "Approved", amount: approvedTotal, className: "bg-[#DCEACB]" },
     { label: "Pending", amount: pendingTotal, className: "bg-[#9FB699]" },
-    {
-      label: "Remaining",
-      amount: Math.max(0, total - approvedTotal - pendingTotal),
-      className: "bg-white/25",
-    },
   ];
   const metrics = [
     { label: "Approved", amount: approvedTotal, count: approved.length },
     { label: "Pending", amount: pendingTotal, count: pending.length },
-    { label: "Needs changes", amount: sum(changes), count: changes.length },
+    { label: "Rejected", amount: sum(rejected), count: rejected.length },
     {
       label: "Approval rate",
       amount: visibleExpenses.length
@@ -148,10 +143,7 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
               </span>
             ))}
           </div>
-          <p className="sr-only">
-            Remaining includes requests needing changes. Rejected requests are
-            excluded from spend.
-          </p>
+          <p className="sr-only">Rejected requests are excluded from spend.</p>
         </div>
         <dl className="hero-metrics mt-auto grid grid-cols-2 gap-x-4 gap-y-5 border-t border-white/15 pt-5 xl:grid-cols-4">
           {metrics.map((metric) => (

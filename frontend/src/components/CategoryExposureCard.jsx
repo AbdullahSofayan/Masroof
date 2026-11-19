@@ -29,7 +29,7 @@ export default function CategoryExposureCard({
     (a, b) => b[1].amount - a[1].amount,
   );
   const awaiting = reviewExpenses.filter(
-    (expense) => expense.status === STATUS.PENDING_MANAGER,
+    (expense) => expense.status === STATUS.PENDING,
   ).length;
   const receipts = expenses.filter((expense) => expense.attachment_url).length;
   return (

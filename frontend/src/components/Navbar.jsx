@@ -84,11 +84,9 @@ export default function Navbar() {
         });
         const count = expenses.filter((expense) =>
           area === "manager"
-            ? expense.status === STATUS.PENDING_MANAGER &&
+            ? expense.status === STATUS.PENDING &&
               expense.requester?.id !== user.id
-            : [STATUS.PENDING_MANAGER, STATUS.PENDING_FINANCE].includes(
-                expense.status,
-              ),
+            : [STATUS.PENDING].includes(expense.status),
         ).length;
         if (active) setPending(count);
       } catch {

@@ -4,7 +4,7 @@ The reusable components use the installed `motion/react` package and the existin
 
 - `ReceiptScanPreview`: local image/PDF preview, one 1.2-second scan sweep per selected file, and a capture confirmation. Replacing a file restarts the sweep; object URLs are revoked when replaced or unmounted. Reduced motion confirms immediately. The sweep represents selecting a receipt; it performs no OCR or policy analysis.
 - `BudgetProgressBar`: exact spent/allocation ratio, a capped visual track, and emerald below 75%, amber from 75% through 90%, and rose above 90%. Over-allocation percentages remain visible even when the track is full. Missing or invalid budgets show an unavailable state.
-- `ApprovalProgressBar`: the existing workflow mapped to Submitted, Manager Review, Finance Review, and Approved, with returned/rejected branches. A manager approval advances to `pending_finance`; final `approved` status remains a Finance decision. Rejection after Finance review is inferred from the existing approval history.
+- `ApprovalProgressBar`: shows Submitted, Pending, and a final Approved or Rejected decision. The department manager is the only approval step.
 - `AnimatedExpenseRows`: valid table rows, position layout animation, and short opacity transitions. The surrounding fixed column widths and percentage cell widths keep entering and exiting rows aligned. Missing observer APIs and reduced motion use ordinary table rows.
 - `SpendSparkline`: six Monday-based weekly totals from final-approved expenses using their expense dates, excluding future dates. The accessible SVG includes exact weekly SAR totals, unique gradient IDs, a draw-on stroke, and a delayed end dot. Missing or throwing SVG geometry APIs use a complete static path.
 

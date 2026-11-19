@@ -131,9 +131,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     await act(async () =>
       host.querySelector('[aria-label="Next page"]').click(),
     );
-    const category = host.querySelector(
-      '[aria-label="Filter by Travel & transport"]',
-    );
+    const category = host.querySelector('[aria-label="Filter by Travel"]');
     expect(category.getAttribute("role")).toBe("button");
     expect(category.tabIndex).toBe(0);
     await act(async () => category.click());
@@ -143,19 +141,19 @@ describe("UI behavior with unavailable browser animation APIs", () => {
       block: "start",
     });
     const expected = expenses.filter(
-      (expense) => expense.category.name === "Travel & transport",
+      (expense) => expense.category.name === "Travel",
     );
     expect(host.querySelectorAll("tbody tr")).toHaveLength(expected.length);
     expect(
       [...host.querySelectorAll("tbody tr")].every((row) =>
-        row.textContent.includes("Travel & transport"),
+        row.textContent.includes("Travel"),
       ),
     ).toBe(true);
     expect(ledger.textContent).toContain(
       `1–${expected.length} of ${expected.length} expenses`,
     );
     expect(button("Clear category filter").textContent).toContain(
-      "Category: Travel & transport",
+      "Category: Travel",
     );
     await act(async () =>
       category.dispatchEvent(
@@ -206,7 +204,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     const scroll = vi.fn();
     ledger.scrollIntoView = scroll;
     const category = host.querySelector(
-      '[aria-label="Filter by Software & subscriptions"]',
+      '[aria-label="Filter by IT & Telecom"]',
     );
     await act(async () => category.click());
     expect(scroll).toHaveBeenLastCalledWith({
@@ -243,9 +241,9 @@ describe("UI behavior with unavailable browser animation APIs", () => {
       {
         created_at: "2026-11-16T22:30:00Z",
         amount: "20",
-        status: STATUS.PENDING_MANAGER,
+        status: STATUS.PENDING,
       },
-      { date: "2026-11-11", amount: "30", status: STATUS.NEEDS_CHANGES },
+      { date: "2026-11-11", amount: "30", status: STATUS.REJECTED },
       { date: "2026-11-10", amount: "40", status: STATUS.APPROVED },
       { date: "2026-11-18", amount: "50", status: STATUS.APPROVED },
       { date: "invalid", amount: "60", status: STATUS.REJECTED },
@@ -253,7 +251,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
         date: "2026-11-16",
         created_at: "2026-11-17T09:00:00Z",
         amount: "70",
-        status: STATUS.PENDING_FINANCE,
+        status: STATUS.PENDING,
       },
     ];
     await render(<SummaryCards expenses={expenses} />);
@@ -271,8 +269,8 @@ describe("UI behavior with unavailable browser animation APIs", () => {
       host.querySelector('[role="group"][aria-label="Spend timeframe"]'),
     ).not.toBeNull();
     expect(button("All time").getAttribute("aria-pressed")).toBe("true");
-    expect(headline()).toBe("310.00");
-    expect(metrics()).toEqual(["190.00", "90.00", "30.00", "43%"]);
+    expect(headline()).toBe("280.00");
+    expect(metrics()).toEqual(["190.00", "90.00", "90.00", "43%"]);
     await act(async () => button("Daily").click());
     expect(button("Daily").getAttribute("aria-pressed")).toBe("true");
     expect(button("All time").getAttribute("aria-pressed")).toBe("false");
@@ -282,22 +280,22 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     );
     expect(metrics()).toEqual(["100.00", "20.00", "0.00", "50%"]);
     expect(allocations()[0]).toBeCloseTo((100 / 120) * 100);
-    expect(allocations()[2]).toBe(0);
+    expect(allocations()).toHaveLength(2);
     await act(async () => button("Weekly").click());
     expect(button("Weekly").getAttribute("aria-pressed")).toBe("true");
     expect(button("Daily").getAttribute("aria-pressed")).toBe("false");
-    expect(headline()).toBe("220.00");
+    expect(headline()).toBe("190.00");
     expect(host.querySelector(".hero-request-count").textContent).toContain(
       "4 requests",
     );
     expect(metrics()).toEqual(["100.00", "90.00", "30.00", "25%"]);
-    expect(allocations()[2]).toBeCloseTo((30 / 220) * 100);
+    expect(allocations()).toHaveLength(2);
     await act(async () => button("All time").click());
-    expect(headline()).toBe("310.00");
+    expect(headline()).toBe("280.00");
     expect(host.querySelector(".hero-request-count").textContent).toContain(
       "7 requests",
     );
-    expect(metrics()).toEqual(["190.00", "90.00", "30.00", "43%"]);
+    expect(metrics()).toEqual(["190.00", "90.00", "90.00", "43%"]);
   });
 
   it("shows zero final values for a timeframe without matching expenses", async () => {
@@ -331,7 +329,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     const expense = {
       date: "2026-11-17",
       amount: "250",
-      status: STATUS.PENDING_MANAGER,
+      status: STATUS.PENDING,
     };
     await render(<SummaryCards expenses={[expense]} />);
     expect(host.querySelector(".hero-number .sr-only").textContent).toBe(
@@ -352,7 +350,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
         [...host.querySelectorAll(".hero-allocation > span")].map(
           (node) => node.style.width,
         ),
-      ).toEqual(["0%", "0%", "0%"]);
+      ).toEqual(["0%", "0%"]);
       expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
     }
   });
@@ -382,7 +380,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
           ...base,
           id: 903,
           amount: "300",
-          status: STATUS.PENDING_MANAGER,
+          status: STATUS.PENDING,
           category: { id: 2, name: "Meals" },
         },
         {
@@ -432,51 +430,35 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     },
   );
 
-  it("distinguishes rejection and returned timeline entries while preserving intact Arabic notes", async () => {
-    const decisions = [
-      STATUS.APPROVED,
-      STATUS.REJECTED,
-      STATUS.NEEDS_CHANGES,
-      DECISION.REJECT,
-      DECISION.REQUEST_CHANGES,
-    ];
+  it("distinguishes final decisions and preserves Arabic notes", async () => {
     await render(
       <ApprovalTimeline
         createdAt="2026-11-15"
         requesterName="سارة العتيبي"
-        approvals={decisions.map((decision, id) => ({
-          id,
-          decision,
-          actor_name: "خالد المنصور",
-          note: "يرجى تحديث الإيصال",
-          created_at: "2026-11-16",
-        }))}
+        approvals={[
+          {
+            id: 1,
+            decision: STATUS.APPROVED,
+            actor_name: "Manager",
+            note: "تمت المراجعة",
+            created_at: "2026-11-16",
+          },
+          {
+            id: 2,
+            decision: STATUS.REJECTED,
+            actor_name: "Manager",
+            note: "يرجى تحديث الإيصال",
+            created_at: "2026-11-16",
+          },
+        ]}
       />,
     );
-    const dots = [...host.querySelectorAll(".timeline-dot")];
-    expect(
-      dots.map((dot) =>
-        dot.querySelector("svg").classList.contains("lucide-check"),
-      ),
-    ).toEqual([true, true, false, false, false, false]);
-    for (const index of [2, 4]) {
-      expect(dots[index].classList.contains("text-rose-600")).toBe(true);
-      expect(dots[index].querySelector(".lucide-x")).not.toBeNull();
-    }
-    for (const index of [3, 5]) {
-      expect(dots[index].classList.contains("text-amber-600")).toBe(true);
-      expect(dots[index].querySelector(".lucide-rotate-ccw")).not.toBeNull();
-    }
-    expect(host.querySelector('p[dir="auto"]').textContent).toBe(
-      "سارة العتيبي",
-    );
-    expect(
-      [...host.querySelectorAll('p[dir="auto"]')].every(
-        (node) => node.children.length === 0,
-      ),
-    ).toBe(true);
+    const dots = host.querySelectorAll(".timeline-dot");
+    expect(dots[1].querySelector(".lucide-check")).not.toBeNull();
+    expect(dots[2].querySelector(".lucide-x")).not.toBeNull();
+    expect(host.textContent).toContain("تمت المراجعة");
+    expect(host.textContent).toContain("يرجى تحديث الإيصال");
   });
-
   it("excludes the manager’s own expense from review links and the pending count, retaining department totals", async () => {
     state.user = demoUsers.find((user) => user.username === "khalid");
     const expenses = createDemoData();
@@ -485,8 +467,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     const countCard = host.querySelector('[aria-label="Awaiting review"]');
     const pending = expenses.filter(
       (entry) =>
-        entry.status === STATUS.PENDING_MANAGER &&
-        entry.requester.id !== state.user.id,
+        entry.status === STATUS.PENDING && entry.requester.id !== state.user.id,
     );
     expect(countCard.querySelector(".sr-only").textContent).toBe(
       String(pending.length),
@@ -569,8 +550,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
   it("deletes from the drawer with one navigation that clears expense and page together", async () => {
     const expenses = createDemoData().filter(
       (entry) =>
-        entry.requester.id === state.user.id &&
-        entry.status === STATUS.PENDING_MANAGER,
+        entry.requester.id === state.user.id && entry.status === STATUS.PENDING,
     );
     let deleted = false;
     vi.spyOn(api, "listExpenses").mockImplementation(
@@ -608,7 +588,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
         Object.assign(element, { showModal: vi.fn(), close: vi.fn() });
       return element;
     });
-    const initial = `?status=${STATUS.PENDING_MANAGER}&page=2&expense=${expenses[0].id}&keep=value`;
+    const initial = `?status=${STATUS.PENDING}&page=2&expense=${expenses[0].id}&keep=value`;
     await render(
       router(
         <>
@@ -623,7 +603,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     expect(remove).toHaveBeenCalledWith(String(expenses[0].id));
     expect(navigations).toEqual([
       initial,
-      `?status=${STATUS.PENDING_MANAGER}&keep=value`,
+      `?status=${STATUS.PENDING}&keep=value`,
     ]);
     expect(host.querySelector("dialog")).toBeNull();
     expect(host.textContent).toContain("0 expenses");
@@ -652,11 +632,11 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     expect(decide).not.toHaveBeenCalled();
     await input(host.querySelector("#manager-note"), "يرجى إرفاق الإيصال");
     expect(button("Reject expense").disabled).toBe(false);
-    expect(button("Request changes").disabled).toBe(false);
-    await act(async () => button("Request changes").click());
+    expect(button("Request changes")).toBeUndefined();
+    await act(async () => button("Reject expense").click());
     expect(decide).toHaveBeenCalledWith(
       "101",
-      DECISION.REQUEST_CHANGES,
+      DECISION.REJECT,
       "يرجى إرفاق الإيصال",
     );
   });
@@ -786,7 +766,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     expect(host.querySelector("p").parentElement.style.opacity).toBe("1");
   });
 
-  it("renders dynamic employee totals in one bento hero and preserves the filtered changes link", async () => {
+  it("renders dynamic employee totals in one bento hero and omits the returned-expense callout", async () => {
     const expenses = createDemoData().filter(
       (expense) => expense.requester.id === state.user.id,
     );
@@ -806,9 +786,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     const callout = [...host.querySelectorAll("a")].find((node) =>
       node.textContent.includes("A quick update is needed"),
     );
-    expect(callout.getAttribute("href")).toBe(
-      `/employee/expenses?status=${STATUS.NEEDS_CHANGES}`,
-    );
+    expect(callout).toBeUndefined();
     expect(host.querySelector("canvas")).toBeNull();
   });
 
@@ -825,7 +803,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
       ),
     );
     expect(button("Reject expense").disabled).toBe(true);
-    expect(button("Request changes").disabled).toBe(true);
+    expect(button("Request changes")).toBeUndefined();
     expect(button("Approve expense").disabled).toBe(false);
     await input(host.querySelector("#manager-note"), "   ");
     expect(button("Reject expense").disabled).toBe(true);
@@ -834,7 +812,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
       "يرجى توضيح تفاصيل الرحلة",
     );
     expect(button("Reject expense").disabled).toBe(false);
-    expect(button("Request changes").disabled).toBe(false);
+    expect(button("Request changes")).toBeUndefined();
     await act(async () => button("Approve expense").click());
     expect(decide).toHaveBeenCalledWith(
       "101",

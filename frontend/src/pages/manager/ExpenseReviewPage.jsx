@@ -1,10 +1,4 @@
-﻿import {
-  Check,
-  CheckCircle2,
-  LoaderCircle,
-  MessageSquare,
-  X,
-} from "lucide-react";
+﻿import { Check, CheckCircle2, LoaderCircle, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ApprovalTimeline from "../../components/ApprovalTimeline";
@@ -38,7 +32,7 @@ export default function ExpenseReviewPage() {
     );
   const expense =
     decisionResult?.id === Number(id) ? decisionResult : detail.data;
-  const pending = expense.status === STATUS.PENDING_MANAGER;
+  const pending = expense.status === STATUS.PENDING;
   const own = expense.requester.id === user.id;
   const canDecide =
     pending && !own && expense.department.id === user.department_id;
@@ -96,13 +90,12 @@ export default function ExpenseReviewPage() {
             {canDecide ? (
               <>
                 <p className="mb-5 text-sm leading-6 text-slate-500">
-                  Approval sends this request to Finance. Add a note when
-                  rejecting or asking for changes.
+                  Approval completes this request. Add a note when rejecting.
                 </p>
                 <label htmlFor="manager-note" className="field-label">
                   Note to employee{" "}
                   <span className="font-normal text-slate-400">
-                    (required for changes or rejection)
+                    (required for rejection)
                   </span>
                 </label>
                 <textarea
@@ -144,19 +137,7 @@ export default function ExpenseReviewPage() {
                       Receipt attachment required before approval
                     </p>
                   )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      className="btn-secondary justify-center text-xs"
-                      disabled={!!busy || !note.trim()}
-                      onClick={() => decide(DECISION.REQUEST_CHANGES)}
-                    >
-                      {busy === DECISION.REQUEST_CHANGES ? (
-                        <LoaderCircle size={15} className="animate-spin" />
-                      ) : (
-                        <MessageSquare size={15} />
-                      )}
-                      Request changes
-                    </button>
+                  <div className="grid gap-3">
                     <button
                       className="btn-danger justify-center text-xs"
                       disabled={!!busy || !note.trim()}

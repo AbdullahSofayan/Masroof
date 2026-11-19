@@ -16,6 +16,7 @@ import {
   writeData,
 } from "./api";
 import { demoCategories } from "./mockData";
+import { migrateCategoryId } from "./demoMigration";
 import {
   addDays,
   COMPANY_SEED_START_ID,
@@ -39,16 +40,9 @@ const currentPeriod = () => {
   return { year, month };
 };
 
-/**
- * One approval step: map older two-step statuses so Finance totals stay right while the
- * employee/manager pages still use them. pending_finance = the manager already approved.
- */
 export function effectiveStatus(status) {
   const value = String(status || "").toLowerCase();
-  if (value === "approved" || value === STATUS.PENDING_FINANCE)
-    return STATUS.APPROVED;
-  if (value === "rejected") return STATUS.REJECTED;
-  return STATUS.PENDING_MANAGER; // Pending, pending_manager, needs_changes
+  return Object.values(STATUS).includes(value) ? value : STATUS.PENDING;
 }
 
 /** AI view in the ML contract's shape ({risk_level, reasons}) or null when not scored. */
@@ -101,9 +95,7 @@ export function normalizeExpense(expense, departments = []) {
 
 function financeUser() {
   const user = actor();
-  if (!(
-    user.role === "finance_admin" || hasPermission(user, PERMISSIONS.FINANCE)
-  ))
+  if (!hasPermission(user, PERMISSIONS.FINANCE))
     throw new ApiError("Only Finance can use this workspace.", 403);
   return user;
 }
@@ -138,7 +130,16 @@ function readSettings() {
   try {
     const stored = JSON.parse(localStorage.getItem(FINANCE_STORAGE_KEY));
     if (Array.isArray(stored?.budgets) && Array.isArray(stored?.limits))
-      return stored;
+      return stored.schema_version === 2
+        ? stored
+        : {
+            ...stored,
+            schema_version: 2,
+            limits: stored.limits.map((limit) => ({
+              ...limit,
+              category_id: migrateCategoryId(limit.category_id),
+            })),
+          };
   } catch {
     /* fall back to the seeded settings */
   }
@@ -260,7 +261,7 @@ export const financeApi = {
       expenses,
       approved_total: sum(approved).toFixed(2),
       pending_total: sum(
-        expenses.filter((entry) => entry.status === STATUS.PENDING_MANAGER),
+        expenses.filter((entry) => entry.status === STATUS.PENDING),
       ).toFixed(2),
       total_budget: totalBudget.toFixed(2),
       spent_this_month: spentThisMonth.toFixed(2),

@@ -1,4 +1,4 @@
-import { CURRENCY, PERMISSIONS, STATUS } from "../utils/constants";
+import { CATEGORIES, CURRENCY, PERMISSIONS, STATUS } from "../utils/constants";
 
 export const department = {
   id: 2,
@@ -57,19 +57,16 @@ export const demoUsers = [
     full_name: "Lina Hassan",
     department_id: 4,
     department: { id: 4, name: "Finance" },
-    role: "finance_admin",
+    role: "finance",
     is_superuser: false,
     permissions: [PERMISSIONS.FINANCE],
   },
 ];
 export const DEMO_PASSWORD = "Masroof123!";
-export const demoCategories = [
-  { id: 1, name: "Meals & hospitality", name_ar: "وجبات وضيافة" },
-  { id: 2, name: "Office supplies", name_ar: "مستلزمات مكتبية" },
-  { id: 3, name: "Travel & transport", name_ar: "سفر وتنقلات" },
-  { id: 4, name: "Software & subscriptions", name_ar: "برامج واشتراكات" },
-  { id: 5, name: "Training & events", name_ar: "تدريب وفعاليات" },
-];
+export const demoCategories = CATEGORIES.map((name, index) => ({
+  id: index + 1,
+  name,
+}));
 const history = (id, decision, note, day = 16) => ({
   id,
   actor_name: "خالد المنصور",
@@ -81,11 +78,11 @@ const seeds = [
   [
     101,
     5,
-    3,
+    2,
     "1450.00",
     "تذكرة طيران لحضور اجتماع العميل في جدة",
     "2026-11-15",
-    STATUS.PENDING_MANAGER,
+    STATUS.PENDING,
     {
       anomaly_score: 0.74,
       risk_level: "High",
@@ -94,23 +91,16 @@ const seeds = [
         "Confirm that the fare includes only business travel.",
       ],
     },
-    [
-      history(
-        1,
-        STATUS.NEEDS_CHANGES,
-        "يرجى إرفاق الفاتورة الضريبية بشكل أوضح",
-        15,
-      ),
-    ],
+    [],
   ],
   [
     102,
     11,
-    4,
+    5,
     "349.00",
     "Figma Professional — monthly design team subscription",
     "2026-11-16",
-    STATUS.PENDING_MANAGER,
+    STATUS.PENDING,
     null,
     [],
   ],
@@ -121,7 +111,7 @@ const seeds = [
     "685.50",
     "ضيافة اجتماع انطلاق مشروع العميل",
     "2026-11-16",
-    STATUS.PENDING_MANAGER,
+    STATUS.PENDING,
     {
       anomaly_score: 0.32,
       risk_level: "Medium",
@@ -132,45 +122,24 @@ const seeds = [
   [
     104,
     5,
-    2,
+    4,
     "420.00",
     "شاشة وملحقات مكتبية لفريق التطوير",
     "2026-11-12",
-    STATUS.NEEDS_CHANGES,
+    STATUS.PENDING,
     null,
-    [
-      history(
-        2,
-        STATUS.NEEDS_CHANGES,
-        "يرجى توضيح تفاصيل المشتريات وإرفاق فاتورة ضريبية.",
-        13,
-      ),
-    ],
+    [],
   ],
   [
     105,
     5,
-    4,
+    5,
     "199.00",
     "GitHub Copilot — monthly subscription",
     "2026-11-10",
     STATUS.APPROVED,
     null,
-    [
-      history(
-        3,
-        STATUS.PENDING_FINANCE,
-        "Approved for the engineering team.",
-        11,
-      ),
-      {
-        id: 4,
-        actor_name: "Lina Hassan",
-        decision: STATUS.APPROVED,
-        note: "Receipt verified. Included in the next reimbursement run.",
-        created_at: "2026-11-12T09:00:00Z",
-      },
-    ],
+    [history(3, STATUS.APPROVED, "Approved for the engineering team.", 11)],
   ],
   [
     106,
@@ -179,40 +148,26 @@ const seeds = [
     "280.00",
     "غداء عمل مع فريق مشروع الرياض",
     "2026-11-09",
-    STATUS.PENDING_FINANCE,
+    STATUS.APPROVED,
     null,
-    [
-      history(
-        5,
-        STATUS.PENDING_FINANCE,
-        "تمت الموافقة على مصروف اجتماع الفريق.",
-        10,
-      ),
-    ],
+    [history(5, STATUS.APPROVED, "تمت الموافقة على مصروف اجتماع الفريق.", 10)],
   ],
   [
     107,
     5,
-    5,
+    6,
     "1800.00",
-    "React Summit — online workshop registration",
+    "Development workstation maintenance",
     "2026-11-07",
     STATUS.APPROVED,
     null,
     [
       history(
         6,
-        STATUS.PENDING_FINANCE,
-        "Training aligned with the team development plan.",
+        STATUS.APPROVED,
+        "Maintenance approved for the development team.",
         8,
       ),
-      {
-        id: 7,
-        actor_name: "Lina Hassan",
-        decision: STATUS.APPROVED,
-        note: "Payment verified.",
-        created_at: "2026-11-09T12:00:00Z",
-      },
     ],
   ],
   [
@@ -229,11 +184,11 @@ const seeds = [
   [
     109,
     11,
-    3,
+    2,
     "2130.00",
     "Dammam client visit — hotel and ground transport",
     "2026-11-14",
-    STATUS.PENDING_MANAGER,
+    STATUS.PENDING,
     {
       anomaly_score: 0.81,
       risk_level: "High",
@@ -246,22 +201,13 @@ const seeds = [
   [
     110,
     12,
-    5,
+    6,
     "950.00",
-    "ورشة عمل تجربة المستخدم",
+    "Meeting room equipment maintenance",
     "2026-11-08",
     STATUS.APPROVED,
     null,
-    [
-      history(9, STATUS.PENDING_FINANCE, "", 9),
-      {
-        id: 10,
-        actor_name: "Lina Hassan",
-        decision: STATUS.APPROVED,
-        note: "",
-        created_at: "2026-11-10T09:00:00Z",
-      },
-    ],
+    [history(9, STATUS.APPROVED, "", 9)],
   ],
   [
     111,
@@ -272,16 +218,7 @@ const seeds = [
     "2026-11-03",
     STATUS.APPROVED,
     null,
-    [
-      history(11, STATUS.PENDING_FINANCE, "Team event confirmed.", 4),
-      {
-        id: 12,
-        actor_name: "Lina Hassan",
-        decision: STATUS.APPROVED,
-        note: "",
-        created_at: "2026-11-05T10:00:00Z",
-      },
-    ],
+    [history(11, STATUS.APPROVED, "Team event confirmed.", 4)],
   ],
   [
     112,
@@ -290,29 +227,20 @@ const seeds = [
     "320.00",
     "تنقلات زيارة عميل — الرياض",
     "2026-11-15",
-    STATUS.PENDING_MANAGER,
+    STATUS.PENDING,
     null,
     [],
   ],
   [
     113,
     5,
-    2,
+    4,
     "135.75",
     "USB-C adapters for the meeting room",
     "2026-11-02",
     STATUS.APPROVED,
     null,
-    [
-      history(13, STATUS.PENDING_FINANCE, "", 3),
-      {
-        id: 14,
-        actor_name: "Lina Hassan",
-        decision: STATUS.APPROVED,
-        note: "Verified.",
-        created_at: "2026-11-04T10:00:00Z",
-      },
-    ],
+    [history(13, STATUS.APPROVED, "", 3)],
   ],
   [
     114,
@@ -321,9 +249,9 @@ const seeds = [
     "78.00",
     "رحلة عمل إلى مكتب العميل",
     "2026-11-01",
-    STATUS.PENDING_FINANCE,
+    STATUS.APPROVED,
     null,
-    [history(15, STATUS.PENDING_FINANCE, "تمت مراجعة الإيصال.", 2)],
+    [history(15, STATUS.APPROVED, "تمت مراجعة الإيصال.", 2)],
   ],
 ];
 export function createDemoData() {

@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { api, getToken } from "../services/api";
-import { SESSION_EXPIRED_EVENT } from "../utils/constants";
+import { ROLE_PERMISSIONS, SESSION_EXPIRED_EVENT } from "../utils/constants";
 
+export function withRolePermissions(profile) {
+  if (!profile) return null;
+  return {
+    ...profile,
+    permissions: [...(ROLE_PERMISSIONS[profile.role] || [])],
+  };
+}
 const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -19,7 +26,7 @@ export function AuthProvider({ children }) {
     api
       .me()
       .then((profile) => {
-        if (active) setUser(profile);
+        if (active) setUser(withRolePermissions(profile));
       })
       .catch((err) => {
         if (!active) return;
@@ -44,7 +51,7 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   }, []);
   async function login(username, password) {
-    const profile = await api.login(username, password);
+    const profile = withRolePermissions(await api.login(username, password));
     setUser(profile);
     setError("");
     return profile;
@@ -59,7 +66,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         token: getToken(),
-        permissions: user?.permissions || [],
+        permissions: [...(ROLE_PERMISSIONS[user?.role] || [])],
         loading,
         error,
         login,

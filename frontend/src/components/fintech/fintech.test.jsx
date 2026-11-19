@@ -130,26 +130,22 @@ describe("financial data and progress", () => {
     await render(<BudgetProgressBar spent={NaN} budget={0} />);
     expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
   });
-  it("maps real workflow states and preserves the Finance boundary", async () => {
-    expect(approvalStage(STATUS.PENDING_MANAGER)).toBe(1);
-    expect(approvalStage(STATUS.PENDING_FINANCE)).toBe(2);
-    expect(approvalStage(STATUS.APPROVED)).toBe(3);
-    await render(<ApprovalProgressBar status={STATUS.PENDING_FINANCE} />);
-    expect(host.querySelector('[aria-current="step"]').textContent).toContain(
-      "Finance Review",
-    );
-    await render(<ApprovalProgressBar status={STATUS.NEEDS_CHANGES} />);
-    expect(host.textContent).toContain("Needs Changes");
-    await render(
-      <ApprovalProgressBar
-        status={STATUS.REJECTED}
-        approvals={[{ decision: STATUS.PENDING_FINANCE }]}
-      />,
-    );
-    expect(host.querySelector('[aria-current="step"]').textContent).toContain(
-      "Finance Review",
-    );
-    expect(host.textContent).toContain("Rejected");
+  it("shows one manager review followed by a final decision", async () => {
+    expect(approvalStage(STATUS.PENDING)).toBe(1);
+    expect(approvalStage(STATUS.APPROVED)).toBe(2);
+    expect(approvalStage(STATUS.REJECTED)).toBe(2);
+    for (const [status, label] of [
+      [STATUS.PENDING, "Pending"],
+      [STATUS.APPROVED, "Approved"],
+      [STATUS.REJECTED, "Rejected"],
+    ]) {
+      await render(<ApprovalProgressBar status={status} />);
+      expect(host.querySelector('[aria-current="step"]').textContent).toContain(
+        label,
+      );
+      expect(host.querySelectorAll("li")).toHaveLength(3);
+      expect(host.textContent).not.toContain("Finance Review");
+    }
   });
   it("derives six weekly buckets from approved expense dates, excluding pending and future records", () => {
     const expense = (date, amount, status = STATUS.APPROVED) => ({
@@ -162,7 +158,7 @@ describe("financial data and progress", () => {
         expense("2026-11-09", "100.10"),
         expense("2026-11-15", "20.20"),
         expense("2026-11-16", "50"),
-        expense("2026-11-17", "999", STATUS.PENDING_FINANCE),
+        expense("2026-11-17", "999", STATUS.PENDING),
         expense("2026-11-18", "999"),
         expense("2026-09-01", "999"),
         expense("invalid", "999"),
@@ -239,7 +235,7 @@ describe("receipts, motion preferences and filtering", () => {
       router(
         <>
           <BudgetProgressBar spent={75} budget={100} />
-          <ApprovalProgressBar status={STATUS.PENDING_FINANCE} />
+          <ApprovalProgressBar status={STATUS.APPROVED} />
           <StatusBadge status={STATUS.APPROVED} />
           <SpendSparkline expenses={createDemoData()} endDate="2026-11-17" />
           <ExpenseTable expenses={expenses} onSelect={vi.fn()} />
@@ -250,7 +246,7 @@ describe("receipts, motion preferences and filtering", () => {
       host.querySelector('[role="progressbar"]').firstElementChild.style.width,
     ).toBe("75%");
     expect(host.querySelector('[aria-current="step"]').textContent).toContain(
-      "Finance Review",
+      "Approved",
     );
     expect(host.querySelector("[data-status]").textContent).toBe("Approved");
     const bars = [...host.querySelectorAll("[data-spend-bar]")];
@@ -366,18 +362,18 @@ describe("receipts, motion preferences and filtering", () => {
       );
     await render(router(<MyExpensesPage />));
     const table = host.querySelector("table");
-    await act(async () => button("Needs changes").click());
+    await act(async () => button("Pending").click());
     expect(host.querySelector("table")).toBe(table);
     expect(host.textContent).toContain("Updating expenses");
     const filtered = expenses.filter(
-      (entry) => entry.status === STATUS.NEEDS_CHANGES,
+      (entry) => entry.status === STATUS.PENDING,
     );
     await act(async () =>
       finish({ items: filtered, total: filtered.length, page: 1, size: 6 }),
     );
     expect(host.querySelector("table")).toBe(table);
     expect(host.querySelectorAll("tbody tr")).toHaveLength(filtered.length);
-    expect(button("Needs changes").getAttribute("aria-pressed")).toBe("true");
+    expect(button("Pending").getAttribute("aria-pressed")).toBe("true");
   });
   it("shows the manager demo budget and data-derived trend, with all workflow filters", async () => {
     state.user = demoUsers.find((user) => user.username === "khalid");
@@ -399,9 +395,8 @@ describe("receipts, motion preferences and filtering", () => {
 
 describe("workflow and upload integrations", () => {
   it.each([
-    [DECISION.APPROVE, STATUS.PENDING_FINANCE, "Finance Review"],
-    [DECISION.REQUEST_CHANGES, STATUS.NEEDS_CHANGES, "Manager Review"],
-    [DECISION.REJECT, STATUS.REJECTED, "Manager Review"],
+    [DECISION.APPROVE, STATUS.APPROVED, "Approved"],
+    [DECISION.REJECT, STATUS.REJECTED, "Rejected"],
   ])(
     "keeps detail elements mounted for the server-confirmed %s status",
     async (decision, status, stage) => {
@@ -438,11 +433,7 @@ describe("workflow and upload integrations", () => {
       await setInput(host.querySelector("#manager-note"), "تمت المراجعة");
       await act(async () =>
         button(
-          decision === DECISION.APPROVE
-            ? "Approve expense"
-            : decision === DECISION.REJECT
-              ? "Reject expense"
-              : "Request changes",
+          decision === DECISION.APPROVE ? "Approve expense" : "Reject expense",
         ).click(),
       );
       expect(host.querySelector("[data-status]")).toBe(badge);
@@ -458,14 +449,14 @@ describe("workflow and upload integrations", () => {
   );
   it("animates a status label to the current status without remounting the pill", async () => {
     enableFrames();
-    await render(<StatusBadge status={STATUS.PENDING_MANAGER} />);
+    await render(<StatusBadge status={STATUS.PENDING} />);
     const badge = host.querySelector("[data-status]");
-    await render(<StatusBadge status={STATUS.PENDING_FINANCE} />);
+    await render(<StatusBadge status={STATUS.APPROVED} />);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 350));
     });
     expect(host.querySelector("[data-status]")).toBe(badge);
-    expect(badge.textContent).toBe("Pending finance");
+    expect(badge.textContent).toBe("Approved");
   });
   it("accepts a dropped receipt, previews it and submits through the existing API calls", async () => {
     vi.spyOn(api, "categories").mockResolvedValue(demoCategories);
