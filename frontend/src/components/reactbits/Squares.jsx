@@ -1,18 +1,18 @@
-import { useRef, useEffect } from 'react';
-import { canAnimate, getCanvasContext, useReducedMotion } from './motionSafety';
+import { useRef, useEffect } from "react";
+import { canAnimate, getCanvasContext, useReducedMotion } from "./motionSafety";
 
 // Official React Bits JS-TW source at 1ea69ea03bef6e6fa5895cc68f60636c286a5f55.
 // Adapted for a light login background, reduced motion and headless environments.
 
 const Squares = ({
-  direction = 'right',
+  direction = "right",
   speed = 1,
-  borderColor = '#999',
+  borderColor = "#999",
   squareSize = 40,
-  hoverFillColor = '#222',
-  shape = 'square',
-  className = '',
-  style
+  hoverFillColor = "#222",
+  shape = "square",
+  className = "",
+  style,
 }) => {
   const reducedMotion = useReducedMotion();
   const canvasRef = useRef(null);
@@ -28,9 +28,9 @@ const Squares = ({
     const ctx = getCanvasContext(canvas);
     if (!ctx) return;
     const parent = canvas.parentElement;
-    const pointerSurface = canvas.closest('main') || parent;
+    const pointerSurface = canvas.closest("main") || parent;
 
-    const isHex = shape === 'hexagon';
+    const isHex = shape === "hexagon";
     const hexHoriz = squareSize * 1.5;
     const hexVert = squareSize * Math.sqrt(3);
 
@@ -41,7 +41,7 @@ const Squares = ({
       numSquaresY.current = Math.ceil(canvas.height / squareSize) + 1;
     };
 
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
     const drawHex = (cx, cy, size) => {
@@ -63,7 +63,8 @@ const Squares = ({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (isHex) {
-        const offsetX = ((gridOffset.current.x % hexHoriz) + hexHoriz) % hexHoriz;
+        const offsetX =
+          ((gridOffset.current.x % hexHoriz) + hexHoriz) % hexHoriz;
         const offsetY = ((gridOffset.current.y % hexVert) + hexVert) % hexVert;
 
         const cols = Math.ceil(canvas.width / hexHoriz) + 3;
@@ -72,7 +73,8 @@ const Squares = ({
         for (let col = -2; col < cols; col++) {
           for (let row = -2; row < rows; row++) {
             const cx = col * hexHoriz + offsetX;
-            const cy = row * hexVert + (col % 2 !== 0 ? hexVert / 2 : 0) + offsetY;
+            const cy =
+              row * hexVert + (col % 2 !== 0 ? hexVert / 2 : 0) + offsetY;
 
             if (
               hoveredSquareRef.current &&
@@ -90,18 +92,26 @@ const Squares = ({
           }
         }
       } else {
-        const startX = Math.floor(gridOffset.current.x / squareSize) * squareSize;
-        const startY = Math.floor(gridOffset.current.y / squareSize) * squareSize;
+        const startX =
+          Math.floor(gridOffset.current.x / squareSize) * squareSize;
+        const startY =
+          Math.floor(gridOffset.current.y / squareSize) * squareSize;
 
         for (let x = startX; x < canvas.width + squareSize; x += squareSize) {
-          for (let y = startY; y < canvas.height + squareSize; y += squareSize) {
+          for (
+            let y = startY;
+            y < canvas.height + squareSize;
+            y += squareSize
+          ) {
             const squareX = x - (gridOffset.current.x % squareSize);
             const squareY = y - (gridOffset.current.y % squareSize);
 
             if (
               hoveredSquareRef.current &&
-              Math.floor((x - startX) / squareSize) === hoveredSquareRef.current.x &&
-              Math.floor((y - startY) / squareSize) === hoveredSquareRef.current.y
+              Math.floor((x - startX) / squareSize) ===
+                hoveredSquareRef.current.x &&
+              Math.floor((y - startY) / squareSize) ===
+                hoveredSquareRef.current.y
             ) {
               ctx.fillStyle = hoverFillColor;
               ctx.fillRect(squareX, squareY, squareSize, squareSize);
@@ -119,10 +129,10 @@ const Squares = ({
         0,
         canvas.width / 2,
         canvas.height / 2,
-        Math.sqrt(canvas.width ** 2 + canvas.height ** 2) / 2
+        Math.sqrt(canvas.width ** 2 + canvas.height ** 2) / 2,
       );
-      gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      gradient.addColorStop(1, 'rgba(248, 250, 252, 0.9)');
+      gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+      gradient.addColorStop(1, "rgba(248, 250, 252, 0.9)");
 
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -134,21 +144,27 @@ const Squares = ({
       const wrapY = isHex ? hexVert : squareSize;
 
       switch (direction) {
-        case 'right':
-          gridOffset.current.x = (gridOffset.current.x - effectiveSpeed + wrapX) % wrapX;
+        case "right":
+          gridOffset.current.x =
+            (gridOffset.current.x - effectiveSpeed + wrapX) % wrapX;
           break;
-        case 'left':
-          gridOffset.current.x = (gridOffset.current.x + effectiveSpeed + wrapX) % wrapX;
+        case "left":
+          gridOffset.current.x =
+            (gridOffset.current.x + effectiveSpeed + wrapX) % wrapX;
           break;
-        case 'up':
-          gridOffset.current.y = (gridOffset.current.y + effectiveSpeed + wrapY) % wrapY;
+        case "up":
+          gridOffset.current.y =
+            (gridOffset.current.y + effectiveSpeed + wrapY) % wrapY;
           break;
-        case 'down':
-          gridOffset.current.y = (gridOffset.current.y - effectiveSpeed + wrapY) % wrapY;
+        case "down":
+          gridOffset.current.y =
+            (gridOffset.current.y - effectiveSpeed + wrapY) % wrapY;
           break;
-        case 'diagonal':
-          gridOffset.current.x = (gridOffset.current.x - effectiveSpeed + wrapX) % wrapX;
-          gridOffset.current.y = (gridOffset.current.y - effectiveSpeed + wrapY) % wrapY;
+        case "diagonal":
+          gridOffset.current.x =
+            (gridOffset.current.x - effectiveSpeed + wrapX) % wrapX;
+          gridOffset.current.y =
+            (gridOffset.current.y - effectiveSpeed + wrapY) % wrapY;
           break;
         default:
           break;
@@ -158,13 +174,14 @@ const Squares = ({
       requestRef.current = requestAnimationFrame(updateAnimation);
     };
 
-    const handleMouseMove = event => {
+    const handleMouseMove = (event) => {
       const rect = canvas.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
       if (isHex) {
-        const offsetX = ((gridOffset.current.x % hexHoriz) + hexHoriz) % hexHoriz;
+        const offsetX =
+          ((gridOffset.current.x % hexHoriz) + hexHoriz) % hexHoriz;
         const offsetY = ((gridOffset.current.y % hexVert) + hexVert) % hexVert;
         const adjustedX = mouseX - offsetX;
         const adjustedY = mouseY - offsetY;
@@ -181,11 +198,17 @@ const Squares = ({
           hoveredSquareRef.current = { x: col, y: row };
         }
       } else {
-        const startX = Math.floor(gridOffset.current.x / squareSize) * squareSize;
-        const startY = Math.floor(gridOffset.current.y / squareSize) * squareSize;
+        const startX =
+          Math.floor(gridOffset.current.x / squareSize) * squareSize;
+        const startY =
+          Math.floor(gridOffset.current.y / squareSize) * squareSize;
 
-        const hoveredSquareX = Math.floor((mouseX + gridOffset.current.x - startX) / squareSize);
-        const hoveredSquareY = Math.floor((mouseY + gridOffset.current.y - startY) / squareSize);
+        const hoveredSquareX = Math.floor(
+          (mouseX + gridOffset.current.x - startX) / squareSize,
+        );
+        const hoveredSquareY = Math.floor(
+          (mouseY + gridOffset.current.y - startY) / squareSize,
+        );
 
         if (
           !hoveredSquareRef.current ||
@@ -201,33 +224,54 @@ const Squares = ({
       hoveredSquareRef.current = null;
     };
 
-    const resize = () => { resizeCanvas(); drawGrid(); };
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(resize) : null;
+    const resize = () => {
+      resizeCanvas();
+      drawGrid();
+    };
+    const observer =
+      typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
     observer?.observe(parent);
     if (!reducedMotion) {
-      pointerSurface.addEventListener('pointermove', handleMouseMove);
-      pointerSurface.addEventListener('pointerleave', handleMouseLeave);
+      pointerSurface.addEventListener("pointermove", handleMouseMove);
+      pointerSurface.addEventListener("pointerleave", handleMouseLeave);
     }
     const resume = () => {
       if (!canAnimate()) return;
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (!document.hidden && !reducedMotion) requestRef.current = requestAnimationFrame(updateAnimation);
+      if (!document.hidden && !reducedMotion)
+        requestRef.current = requestAnimationFrame(updateAnimation);
     };
-    document.addEventListener('visibilitychange', resume);
+    document.addEventListener("visibilitychange", resume);
     drawGrid();
     resume();
 
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      if (requestRef.current && canAnimate()) cancelAnimationFrame(requestRef.current);
+      window.removeEventListener("resize", resizeCanvas);
+      if (requestRef.current && canAnimate())
+        cancelAnimationFrame(requestRef.current);
       observer?.disconnect();
-      pointerSurface.removeEventListener('pointermove', handleMouseMove);
-      pointerSurface.removeEventListener('pointerleave', handleMouseLeave);
-      document.removeEventListener('visibilitychange', resume);
+      pointerSurface.removeEventListener("pointermove", handleMouseMove);
+      pointerSurface.removeEventListener("pointerleave", handleMouseLeave);
+      document.removeEventListener("visibilitychange", resume);
     };
-  }, [direction, speed, borderColor, hoverFillColor, squareSize, shape, reducedMotion]);
+  }, [
+    direction,
+    speed,
+    borderColor,
+    hoverFillColor,
+    squareSize,
+    shape,
+    reducedMotion,
+  ]);
 
-  return <canvas ref={canvasRef} aria-hidden="true" className={`pointer-events-none block h-full w-full border-none ${className}`} style={style} />;
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className={`pointer-events-none block h-full w-full border-none ${className}`}
+      style={style}
+    />
+  );
 };
 
 export default Squares;
