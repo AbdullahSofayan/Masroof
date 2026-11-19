@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { canUseFinance, hasPermission } from "../utils/constants";
 import { ErrorBox, Spinner } from "./UI";
-export default function ProtectedRoute({ permission, finance = false }) {
+export default function ProtectedRoute({ permission, finance = false, roles }) {
   const { user, loading, error, retry, logout } = useAuth();
   const location = useLocation();
   if (loading) return <Spinner />;
@@ -19,7 +19,8 @@ export default function ProtectedRoute({ permission, finance = false }) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   if (
     (finance && !canUseFinance(user)) ||
-    (permission && !hasPermission(user, permission))
+    (permission && !hasPermission(user, permission)) ||
+    (roles && !roles.includes(user.role))
   )
     return <Navigate to="/access-denied" replace />;
   return <Outlet />;

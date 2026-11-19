@@ -30,3 +30,9 @@ export const initials = (name = "") =>
     .slice(0, 2)
     .map((part) => part[0])
     .join("");
+
+export function userDisplayName(user) {
+  return (
+    user?.full_name || user?.name || user?.username || user?.email || "Account"
+  );
+}

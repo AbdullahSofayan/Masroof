@@ -12,7 +12,8 @@ import { Brand } from "../components/Navbar";
 import Squares from "../components/reactbits/Squares";
 import { ErrorBox, Spinner } from "../components/UI";
 import { useAuth } from "../context/AuthContext";
-import { CURRENCY, homeFor } from "../utils/constants";
+import { CURRENCY } from "../utils/constants";
+import { preferredHomeFor } from "../utils/workspaceRoutes";
 
 export default function LoginPage() {
   const {
@@ -40,7 +41,7 @@ export default function LoginPage() {
         </button>
       </div>
     );
-  if (user) return <Navigate to={homeFor(user)} replace />;
+  if (user) return <Navigate to={preferredHomeFor(user)} replace />;
   async function signIn() {
     setBusy(true);
     setError("");
@@ -50,7 +51,7 @@ export default function LoginPage() {
       navigate(
         from?.startsWith("/") && !from.startsWith("//") && from !== "/login"
           ? from
-          : homeFor(profile),
+          : preferredHomeFor(profile),
         { replace: true },
       );
     } catch (err) {

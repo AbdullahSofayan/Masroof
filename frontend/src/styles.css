@@ -603,6 +603,11 @@
   opacity: 1;
   fill-opacity: 1;
 }
+[data-density="compact"] table th,
+[data-density="compact"] table td {
+  padding-block: 0.5rem;
+}
+
 @media (min-width: 1024px) {
   .workspace-shell {
     --workspace-offset: 236px;

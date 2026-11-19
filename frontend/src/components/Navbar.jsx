@@ -1,6 +1,7 @@
 import {
   ArrowUpRight,
   Building2,
+  ChartColumn,
   ChevronDown,
   LayoutDashboard,
   LogOut,
@@ -20,13 +21,11 @@ import {
 } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, USE_MOCK } from "../services/api";
-import {
-  canUseFinance,
-  hasPermission,
-  PERMISSIONS,
-  STATUS,
-} from "../utils/constants";
-import { formatDate, initials } from "../utils/formatters";
+import { canUseFinance, homeFor, STATUS } from "../utils/constants";
+import { recordName } from "../utils/expenseFields";
+import { formatDate, initials, userDisplayName } from "../utils/formatters";
+import { getWorkspaceViews, REPORT_ROLES } from "../utils/workspaceRoutes";
+import NotificationBell from "./NotificationBell";
 
 export function Brand({ light = false }) {
   return (
@@ -55,21 +54,16 @@ export function Brand({ light = false }) {
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, state } = useLocation();
   const [pending, setPending] = useState(null);
-  const area = pathname.startsWith("/manager")
-    ? "manager"
-    : pathname.startsWith("/finance")
-      ? "finance"
-      : "employee";
-  const views = [
-    hasPermission(user, PERMISSIONS.OWN) && ["employee", "Employee workspace"],
-    hasPermission(user, PERMISSIONS.DEPARTMENT) && [
-      "manager",
-      "Manager workspace",
-    ],
-    canUseFinance(user) && ["finance", "Finance workspace"],
-  ].filter(Boolean);
+  const name = userDisplayName(user);
+  const views = getWorkspaceViews(user);
+  const requestedArea = pathname.split("/")[1];
+  const area = views.some(([view]) => view === requestedArea)
+    ? requestedArea
+    : views.some(([view]) => view === state?.workspace)
+      ? state.workspace
+      : homeFor(user).split("/")[1];
   useEffect(() => {
     if (area === "finance") return;
     let active = true;
@@ -145,6 +139,9 @@ export default function Navbar() {
             },
             { to: "/employee/expenses/new", label: "New expense", Icon: Plus },
           ];
+  if (REPORT_ROLES.includes(user.role)) {
+    links.push({ to: "/reports", label: "Reports", Icon: ChartColumn });
+  }
   return (
     <div className="workspace-shell">
       <a href="#main-content" className="skip-link">
@@ -167,17 +164,27 @@ export default function Navbar() {
               Demo workspace
             </span>
           )}
-          <div className="hidden text-right md:block">
-            <p className="text-xs font-semibold" dir="auto">
-              {user.full_name}
-            </p>
-            <p className="mt-1 text-[10px] capitalize text-zinc-400">
-              {area} workspace
-            </p>
-          </div>
-          <div aria-hidden="true" className="avatar" dir="auto">
-            {initials(user.full_name)}
-          </div>
+          <NotificationBell key={`${user.id}:${user.role}`} />
+          <NavLink
+            to="/profile"
+            state={{ workspace: area }}
+            aria-label="Profile & Settings"
+            className={({ isActive }) =>
+              `flex min-w-0 items-center gap-2.5 rounded-full p-1 transition-colors hover:bg-zinc-100 md:pl-3 ${isActive ? "bg-emerald-50 ring-1 ring-emerald-200" : ""}`
+            }
+          >
+            <div className="hidden min-w-0 text-right md:block">
+              <p className="truncate text-xs font-semibold" dir="auto">
+                {name}
+              </p>
+              <p className="mt-1 text-[10px] capitalize text-zinc-500">
+                {area} workspace
+              </p>
+            </div>
+            <span aria-hidden="true" className="avatar" dir="auto">
+              {initials(name)}
+            </span>
+          </NavLink>
           <button
             className="icon-button mobile-logout"
             aria-label="Log out"
@@ -241,6 +248,7 @@ export default function Navbar() {
               <NavLink
                 key={to}
                 to={to}
+                state={to === "/reports" ? { workspace: area } : undefined}
                 end
                 className={({ isActive }) =>
                   `nav-item ${isActive ? "active" : ""}`
@@ -271,25 +279,34 @@ export default function Navbar() {
             </Link>
           )}
           <div className="sidebar-footer">
-            <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
+            <NavLink
+              to="/profile"
+              state={{ workspace: area }}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-zinc-100 ${isActive ? "bg-emerald-50 ring-1 ring-emerald-200" : ""}`
+              }
+            >
               <span className="avatar shrink-0" dir="auto">
-                {initials(user.full_name)}
+                {initials(name)}
               </span>
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium" dir="auto">
-                  {user.full_name}
+                  {name}
                 </p>
                 <p
                   className="mt-1 truncate text-[10px] text-zinc-400"
                   dir="auto"
                 >
-                  {user.department?.name || `Department ${user.department_id}`}
+                  {recordName(user.department) ||
+                    (user.department_id
+                      ? `Department ${user.department_id}`
+                      : "General")}
                 </p>
                 <p className="mt-1 text-[9px] capitalize text-zinc-500">
                   {area} workspace
                 </p>
               </div>
-            </div>
+            </NavLink>
             <button
               className="mt-4 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[11px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
               onClick={() => {

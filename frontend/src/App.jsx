@@ -1,10 +1,12 @@
-import { Component } from "react";
+import { Component, useEffect } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBox, Spinner } from "./components/UI";
 import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
+import ProfilePage from "./pages/ProfilePage";
+import ReportsPage from "./pages/ReportsPage";
 import AddExpensePage from "./pages/employee/AddExpensePage";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 import MyExpensesPage from "./pages/employee/MyExpensesPage";
@@ -14,7 +16,12 @@ import FinanceDashboard from "./pages/finance/FinanceDashboard";
 import ForecastPage from "./pages/finance/ForecastPage";
 import ExpenseReviewPage from "./pages/manager/ExpenseReviewPage";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
-import { homeFor, PERMISSIONS } from "./utils/constants";
+import { homeFor, PERMISSIONS, ROLE_PERMISSIONS } from "./utils/constants";
+import {
+  applyDensityPreference,
+  getUserPreferences,
+} from "./utils/preferences";
+import { preferredHomeFor, REPORT_ROLES } from "./utils/workspaceRoutes";
 
 function Home() {
   const { user, loading, error, retry, logout } = useAuth();
@@ -28,7 +35,7 @@ function Home() {
         </button>
       </div>
     );
-  return <Navigate to={user ? homeFor(user) : "/login"} replace />;
+  return <Navigate to={user ? preferredHomeFor(user) : "/login"} replace />;
 }
 function Unavailable({ forbidden = false }) {
   const { user, logout } = useAuth();
@@ -86,57 +93,76 @@ export class ErrorBoundary extends Component {
   }
 }
 export default function App() {
+  const { user } = useAuth();
+  const userId = user?.id;
+  useEffect(() => {
+    applyDensityPreference(
+      user?.role && getUserPreferences(userId).compactTables,
+    );
+    return () => applyDensityPreference(false);
+  }, [userId, user?.role]);
+
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route element={<ProtectedRoute permission={PERMISSIONS.OWN} />}>
+      <Route element={<ProtectedRoute roles={Object.keys(ROLE_PERMISSIONS)} />}>
         <Route element={<Navbar />}>
+          <Route path="/profile" element={<ProfilePage key={userId} />} />
+          <Route element={<ProtectedRoute roles={REPORT_ROLES} />}>
+            <Route
+              path="/reports"
+              element={<ReportsPage key={`${userId}:${user?.role}`} />}
+            />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.OWN} />}>
+            <Route
+              path="/employee"
+              element={<Navigate to="/employee/dashboard" replace />}
+            />
+            <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+            <Route path="/employee/expenses" element={<MyExpensesPage />} />
+            <Route path="/employee/expenses/new" element={<AddExpensePage />} />
+            <Route
+              path="/employee/expenses/:id/edit"
+              element={<AddExpensePage />}
+            />
+          </Route>
           <Route
-            path="/employee"
-            element={<Navigate to="/employee/dashboard" replace />}
-          />
-          <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
-          <Route path="/employee/expenses" element={<MyExpensesPage />} />
-          <Route path="/employee/expenses/new" element={<AddExpensePage />} />
-          <Route
-            path="/employee/expenses/:id/edit"
-            element={<AddExpensePage />}
-          />
-        </Route>
-      </Route>
-      <Route element={<ProtectedRoute permission={PERMISSIONS.DEPARTMENT} />}>
-        <Route element={<Navbar />}>
-          <Route
-            path="/manager"
-            element={<Navigate to="/manager/dashboard" replace />}
-          />
-          <Route path="/manager/dashboard" element={<ManagerDashboard />} />
-          <Route path="/manager/expenses/:id" element={<ExpenseReviewPage />} />
-        </Route>
-      </Route>
-      <Route element={<ProtectedRoute finance />}>
-        <Route element={<Navbar />}>
-          <Route
-            path="/finance"
-            element={<Navigate to="/finance/dashboard" replace />}
-          />
-          <Route path="/finance/dashboard" element={<FinanceDashboard />} />
-          <Route
-            path="/finance/queue"
-            element={<Navigate to="/finance/dashboard" replace />}
-          />
-          <Route
-            path="/finance/history"
-            element={<Navigate to="/finance/dashboard" replace />}
-          />
-          <Route
-            path="/finance/expenses/:id"
-            element={<Navigate to="/finance/dashboard" replace />}
-          />
-          <Route path="/finance/budgets" element={<BudgetsPage />} />
-          <Route path="/finance/limits" element={<CategoryLimitsPage />} />
-          <Route path="/finance/forecast" element={<ForecastPage />} />
+            element={<ProtectedRoute permission={PERMISSIONS.DEPARTMENT} />}
+          >
+            <Route
+              path="/manager"
+              element={<Navigate to="/manager/dashboard" replace />}
+            />
+            <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+            <Route
+              path="/manager/expenses/:id"
+              element={<ExpenseReviewPage />}
+            />
+          </Route>
+          <Route element={<ProtectedRoute finance />}>
+            <Route
+              path="/finance"
+              element={<Navigate to="/finance/dashboard" replace />}
+            />
+            <Route path="/finance/dashboard" element={<FinanceDashboard />} />
+            <Route
+              path="/finance/queue"
+              element={<Navigate to="/finance/dashboard" replace />}
+            />
+            <Route
+              path="/finance/history"
+              element={<Navigate to="/finance/dashboard" replace />}
+            />
+            <Route
+              path="/finance/expenses/:id"
+              element={<Navigate to="/finance/dashboard" replace />}
+            />
+            <Route path="/finance/budgets" element={<BudgetsPage />} />
+            <Route path="/finance/limits" element={<CategoryLimitsPage />} />
+            <Route path="/finance/forecast" element={<ForecastPage />} />
+          </Route>
         </Route>
       </Route>
       <Route path="/access-denied" element={<Unavailable forbidden />} />
