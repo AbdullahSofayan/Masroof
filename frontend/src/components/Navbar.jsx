@@ -1,4 +1,4 @@
-import { ArrowUpRight, Building2, ChevronDown, LayoutDashboard, LogOut, Plus, ReceiptText } from 'lucide-react';
+import { ArrowUpRight, Building2, ChevronDown, LayoutDashboard, LogOut, Plus, ReceiptText, SlidersHorizontal, TrendingUp, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -41,7 +41,7 @@ export default function Navbar() {
     return () => { active = false; window.clearInterval(interval); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, [area, pathname, user.id]);
   const links = area === 'manager' ? [{ to: '/manager/dashboard', label: 'Department overview', Icon: LayoutDashboard, pending: true }]
-    : area === 'finance' ? [{ to: '/finance/dashboard', label: 'Finance', Icon: Building2 }]
+    : area === 'finance' ? [{ to: '/finance/dashboard', label: 'Overview', Icon: LayoutDashboard }, { to: '/finance/budgets', label: 'Budgets', Icon: Wallet }, { to: '/finance/limits', label: 'Category limits', Icon: SlidersHorizontal }, { to: '/finance/forecast', label: 'Forecast', Icon: TrendingUp }]
       : [{ to: '/employee/dashboard', label: 'Overview', Icon: LayoutDashboard }, { to: '/employee/expenses', label: 'My expenses', Icon: ReceiptText, pending: true }, { to: '/employee/expenses/new', label: 'New expense', Icon: Plus }];
   return <div className="workspace-shell">
     <a href="#main-content" className="skip-link">Skip to content</a>
