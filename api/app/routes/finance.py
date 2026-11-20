@@ -1,7 +1,8 @@
-"""Finance API: departments, category spending limits, and monthly budgets.
+"""Finance API: departments, category spending limits, monthly budgets, and the AI summary.
 
 Only finance admins can change budgets and limits.
 """
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -18,6 +19,7 @@ from app.models.expense import Expense
 from app.models.expense_limit import ExpenseLimit
 from app.models.user import User
 from app.schemas.finance import (
+    AnomalySummary,
     BudgetCreate,
     BudgetRead,
     BudgetUpdate,
@@ -163,3 +165,58 @@ def delete_expense_limit(limit_id: int, db: Session = Depends(get_db), _: User =
     db.delete(limit)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------- Finance dashboard: unusual requests (ML contract C9) ----------
+@router.get("/dashboard/finance/anomalies", response_model=AnomalySummary)
+def anomaly_summary(
+    year: int | None = Query(None, ge=2000, le=2100),
+    month: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _: User = Depends(_finance),
+):
+    """How many requests the AI marked high / medium / low in one month (this month by default)."""
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
+    expenses = db.scalars(
+        select(Expense).where(
+            extract("year", Expense.expense_date) == year,
+            extract("month", Expense.expense_date) == month,
+        )
+    ).all()
+
+    counts = {"high": 0, "medium": 0, "low": 0, "not_scored": 0}
+    departments = {}
+    reasons = {}
+    for expense in expenses:
+        level = getattr(expense.risk_level, "value", expense.risk_level)
+        if level is None:
+            counts["not_scored"] += 1
+            continue
+        level = level.lower()
+        counts[level] += 1
+
+        row = departments.setdefault(
+            expense.department_id,
+            {
+                "department_id": expense.department_id,
+                "department_name": expense.department.name if expense.department else "Unassigned",
+                "flagged": 0,
+                "total": 0,
+            },
+        )
+        row["total"] += 1
+        if level in ("medium", "high"):
+            row["flagged"] += 1
+            for reason in expense.risk_justification or []:
+                item = reasons.setdefault(reason["code"], {**reason, "count": 0})
+                item["count"] += 1
+
+    by_department = []
+    for row in departments.values():
+        row["flagged_percent"] = round(row["flagged"] / row["total"] * 100, 1)
+        by_department.append(row)
+    by_department.sort(key=lambda row: row["flagged_percent"], reverse=True)
+    top_reasons = sorted(reasons.values(), key=lambda item: item["count"], reverse=True)[:5]
+    return {"counts": counts, "by_department": by_department, "top_reasons": top_reasons}

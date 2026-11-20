@@ -63,3 +63,32 @@ class BudgetUsageRead(BaseModel):
     spent: Decimal
     remaining: Decimal
     percent: float
+
+
+# ---------- Finance dashboard: unusual requests (ML contract C9) ----------
+class RiskCounts(BaseModel):
+    high: int
+    medium: int
+    low: int
+    not_scored: int
+
+
+class DepartmentRisk(BaseModel):
+    department_id: int | None
+    department_name: str
+    flagged: int = Field(description="Requests with risk medium or high.")
+    total: int = Field(description="All scored requests.")
+    flagged_percent: float = Field(description="flagged / total x 100.")
+
+
+class ReasonCount(BaseModel):
+    code: str
+    text_en: str
+    text_ar: str
+    count: int = Field(description="How many flagged requests have this reason.")
+
+
+class AnomalySummary(BaseModel):
+    counts: RiskCounts
+    by_department: list[DepartmentRisk] = Field(description="Highest flagged_percent first.")
+    top_reasons: list[ReasonCount] = Field(description="Top 5 among flagged requests.")
