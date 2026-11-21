@@ -203,22 +203,21 @@ export function RankedBars({
   selectedKey,
 }) {
   const maximum = Math.max(0, ...rows.map((row) => row.amount));
-  if (!rows.length)
-    return <p className="py-5 text-sm text-zinc-500">{emptyText}</p>;
+  if (!rows.length) return <p className="page-description py-4">{emptyText}</p>;
   return (
     <div className="space-y-1">
       {rows.map((row) => {
         const width = maximum > 0 ? (row.amount / maximum) * 100 : 0;
         const content = (
           <>
-            <div className="mb-2 flex items-start justify-between gap-3 text-[11px]">
-              <span className="min-w-0 truncate text-zinc-600" dir="auto">
+            <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs leading-snug">
+              <span className="min-w-0 wrap-anywhere text-zinc-700" dir="auto">
                 {row.label}
               </span>
               <span className="shrink-0 text-right font-medium tabular-nums text-zinc-900">
                 {formatMoney(row.amount)}
                 {row.note && (
-                  <span className="ml-1 text-[10px] font-normal text-zinc-500">
+                  <span className="ml-1 text-[11px] font-normal text-zinc-600">
                     {row.note}
                   </span>
                 )}

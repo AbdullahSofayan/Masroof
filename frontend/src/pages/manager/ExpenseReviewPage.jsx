@@ -79,28 +79,37 @@ export default function ExpenseReviewPage() {
           {expense.ai_analysis && (
             <RiskAlertBox analysis={expense.ai_analysis} />
           )}
-          <section className="card p-5 sm:p-6">
-            <h2 className="flex items-center gap-2 font-semibold">
+          <section
+            className="card bento-panel"
+            aria-labelledby="decision-heading"
+          >
+            <h2
+              id="decision-heading"
+              className="bento-title flex items-center gap-2"
+            >
               <CheckCircle2 size={18} className="text-emerald-600" />
               Your decision
             </h2>
-            <div className="mt-4">
-              <ErrorBox message={error} />
-            </div>
+            {error && (
+              <div className="mt-4">
+                <ErrorBox message={error} />
+              </div>
+            )}
             {canDecide ? (
               <>
-                <p className="mb-5 text-sm leading-6 text-slate-500">
+                <p className="page-description mb-5">
                   Approval completes this request. Add a note when rejecting.
                 </p>
                 <label htmlFor="manager-note" className="field-label">
                   Note to employee{" "}
-                  <span className="font-normal text-slate-400">
+                  <span className="caption font-normal">
                     (required for rejection)
                   </span>
                 </label>
                 <textarea
                   id="manager-note"
-                  className="input min-h-32 resize-y leading-7"
+                  className="input min-h-28 resize-y leading-relaxed"
+                  aria-describedby="manager-note-count"
                   dir="auto"
                   placeholder="Share the context your employee needs…"
                   maxLength={NOTE_MAX_LENGTH}
@@ -108,7 +117,7 @@ export default function ExpenseReviewPage() {
                   onChange={(event) => setNote(event.target.value)}
                   disabled={!!busy}
                 />
-                <p className="mt-2 text-right text-xs tabular-nums text-slate-400">
+                <p id="manager-note-count" className="caption mt-2 text-right">
                   {note.length} / {NOTE_MAX_LENGTH}
                 </p>
                 <div className="mt-5 grid gap-3">
@@ -130,10 +139,7 @@ export default function ExpenseReviewPage() {
                     Approve expense
                   </button>
                   {!expense?.attachment_url && (
-                    <p
-                      id="approval-receipt-required"
-                      className="text-xs text-slate-500"
-                    >
+                    <p id="approval-receipt-required" className="caption">
                       Receipt attachment required before approval
                     </p>
                   )}
@@ -155,7 +161,7 @@ export default function ExpenseReviewPage() {
               </>
             ) : (
               <div>
-                <p className="text-sm leading-6 text-slate-500">
+                <p className="page-description">
                   {own && pending
                     ? "Your own expense must be reviewed by another manager."
                     : "This request has moved beyond manager review. Its decision is recorded in the history below."}

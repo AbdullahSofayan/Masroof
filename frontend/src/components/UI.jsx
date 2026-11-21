@@ -20,19 +20,24 @@ export function Spinner({ label = "Loading your workspace…" }) {
     </div>
   );
 }
-export function ErrorBox({ message, retry }) {
+export function ErrorBox({ id, message, retry }) {
   return (
     message && (
       <div
+        id={id}
         role="alert"
         className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
       >
-        <AlertCircle size={19} className="shrink-0" />
-        <div className="min-w-0 flex-1" dir="auto">
+        <AlertCircle size={19} className="shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1 wrap-anywhere" dir="auto">
           {message}
         </div>
         {retry && (
-          <button className="shrink-0 font-semibold underline" onClick={retry}>
+          <button
+            type="button"
+            className="shrink-0 font-semibold underline underline-offset-4"
+            onClick={retry}
+          >
             Try again
           </button>
         )}
@@ -44,35 +49,31 @@ export function EmptyState({
   title = "No expenses yet",
   description = "Your expense requests will appear here.",
   action,
+  Icon = ReceiptText,
+  className = "",
 }) {
   return (
-    <div className="px-5 py-16 text-center">
-      <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-        <ReceiptText size={24} />
+    <div className={`empty-state ${className}`}>
+      <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-800">
+        <Icon size={20} aria-hidden="true" />
       </div>
-      <h3 className="font-semibold text-slate-900">{title}</h3>
-      <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
-        {description}
-      </p>
+      <h3 className="text-base font-semibold text-zinc-900">{title}</h3>
+      <p className="page-description mx-auto max-w-[36ch]">{description}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
 export function PageHeading({ eyebrow, title, description, action }) {
   return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-      <div>
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
         {eyebrow && (
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
             {eyebrow}
           </p>
         )}
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-          {title}
-        </h1>
-        {description && (
-          <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-        )}
+        <h1 className="page-title">{title}</h1>
+        {description && <p className="page-description">{description}</p>}
       </div>
       {action}
     </div>

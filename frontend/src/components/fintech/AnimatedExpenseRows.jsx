@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import { useFintechMotion } from "./useFintechMotion";
 
-const ROW_CLASS = "group transition-colors duration-150 hover:bg-slate-50/90";
+const ROW_CLASS = "group";
 const AnimatedRow = forwardRef(function AnimatedRow({ children }, ref) {
   const present = useIsPresent();
   return (

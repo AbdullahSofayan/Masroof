@@ -71,12 +71,12 @@ function PreferenceSwitch({ id, label, description, checked, onChange }) {
         aria-checked={checked}
         aria-labelledby={`${id}-label`}
         aria-describedby={`${id}-description`}
-        className={`flex h-7 w-12 shrink-0 items-center rounded-full border px-0.5 transition-colors ${checked ? "justify-end border-emerald-700 bg-emerald-700" : "justify-start border-zinc-400 bg-zinc-400"}`}
+        className={`relative flex h-7 w-12 shrink-0 items-center rounded-full border px-0.5 transition-colors before:absolute before:-inset-y-2 before:inset-x-0 ${checked ? "border-emerald-700 bg-emerald-700 hover:bg-emerald-800" : "border-zinc-500 bg-zinc-500 hover:bg-zinc-600"}`}
         onClick={() => onChange(!checked)}
       >
         <span
           aria-hidden="true"
-          className="size-5 rounded-full bg-white shadow-sm"
+          className={`size-5 rounded-full bg-white shadow-sm transition-transform duration-150 ${checked ? "translate-x-5" : ""}`}
         />
       </button>
     </div>
@@ -110,12 +110,9 @@ export default function ProfilePage() {
         title="Profile & Settings"
         description="Manage your account details, workspace density, and notification preferences."
       />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section
-          className="card min-w-0 p-5 sm:p-6"
-          aria-labelledby="account-heading"
-        >
-          <h2 id="account-heading" className="text-base font-semibold">
+      <div className="workspace-grid grid-cols-1 lg:grid-cols-3">
+        <section className="card bento-panel" aria-labelledby="account-heading">
+          <h2 id="account-heading" className="bento-title">
             Account identity
           </h2>
           <span
@@ -154,7 +151,7 @@ export default function ProfilePage() {
         </section>
 
         <section
-          className="card min-w-0 p-5 sm:p-6 lg:col-span-2"
+          className="card bento-panel lg:col-span-2"
           aria-labelledby="preferences-heading"
         >
           <div className="mb-1 flex items-center gap-2.5">
@@ -163,7 +160,7 @@ export default function ProfilePage() {
               className="text-emerald-700"
               aria-hidden="true"
             />
-            <h2 id="preferences-heading" className="text-base font-semibold">
+            <h2 id="preferences-heading" className="bento-title">
               Workspace preferences
             </h2>
           </div>
@@ -239,7 +236,7 @@ export default function ProfilePage() {
         </section>
 
         <section
-          className="card min-w-0 p-5 sm:p-6 lg:col-span-3"
+          className="card bento-panel lg:col-span-3"
           aria-labelledby="permissions-heading"
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -249,7 +246,7 @@ export default function ProfilePage() {
                 className="text-emerald-700"
                 aria-hidden="true"
               />
-              <h2 id="permissions-heading" className="text-base font-semibold">
+              <h2 id="permissions-heading" className="bento-title">
                 Role permissions & session
               </h2>
             </div>

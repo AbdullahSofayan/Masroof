@@ -66,13 +66,13 @@ export default function CategoryExposureCard({
                 }
               }}
             >
-              <div className="mb-2 flex items-start justify-between gap-3 text-[11px]">
+              <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs leading-snug">
                 <span className="min-w-0 text-zinc-600" dir="auto">
                   {category.name}
                 </span>
                 <span className="shrink-0 text-right font-medium tabular-nums text-zinc-900">
                   {formatMoney(category.amount)}{" "}
-                  <span className="ml-1 text-[10px] font-normal text-zinc-400">
+                  <span className="ml-1 text-[11px] font-normal text-zinc-600">
                     {Math.round(percent)}%
                   </span>
                 </span>
@@ -90,12 +90,12 @@ export default function CategoryExposureCard({
           );
         })}
         {!rows.length && (
-          <p className="py-5 text-sm text-zinc-400">
+          <p className="page-description py-4">
             Category insights appear with your first expense.
           </p>
         )}
       </div>
-      <dl className="mt-5 space-y-3 border-t border-zinc-100 pt-4 text-[11px]">
+      <dl className="mt-4 space-y-2.5 border-t border-zinc-100 pt-4 text-xs">
         <div className="flex justify-between gap-3">
           <dt className="text-zinc-500">Average claim</dt>
           <dd className="font-medium tabular-nums">

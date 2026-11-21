@@ -1,7 +1,8 @@
-import { Bell } from "lucide-react";
+import { Bell, BellOff } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { EmptyState } from "./UI";
 import { DECISION_STATUS, STATUS, STATUS_META } from "../utils/constants";
 import { formatDate, formatMoney } from "../utils/formatters";
 import {
@@ -215,14 +216,25 @@ export default function NotificationBell() {
   }
 
   return (
-    <div ref={container} className="shrink-0 sm:relative">
+    <div
+      ref={container}
+      className="shrink-0 sm:relative"
+      onBlur={(event) => {
+        if (
+          event.relatedTarget &&
+          !event.currentTarget.contains(event.relatedTarget)
+        ) {
+          setIsOpen(false);
+        }
+      }}
+    >
       <button
         ref={trigger}
         type="button"
-        className="icon-button relative"
+        className="icon-button relative aria-expanded:border-emerald-300 aria-expanded:bg-emerald-50 aria-expanded:text-emerald-800"
         aria-label="Notifications"
         aria-expanded={isOpen}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-controls={isOpen ? popoverId : undefined}
         aria-describedby={displayCount ? `${popoverId}-count` : undefined}
         onClick={() => {
@@ -235,7 +247,7 @@ export default function NotificationBell() {
           <>
             <span
               aria-hidden="true"
-              className="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-emerald-600 px-1 text-[10px] leading-4 font-semibold text-white ring-2 ring-white"
+              className="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-emerald-700 px-1 text-[10px] leading-4 font-semibold text-white ring-2 ring-white"
             >
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
@@ -252,16 +264,16 @@ export default function NotificationBell() {
           role="dialog"
           aria-labelledby={`${popoverId}-title`}
           tabIndex={-1}
-          className="card absolute inset-x-4 top-full z-50 mt-2 ml-auto max-w-80 overflow-hidden shadow-xl outline-none sm:right-0 sm:left-auto sm:mt-3 sm:w-96 sm:max-w-96"
+          className="notification-panel absolute inset-x-4 top-full z-50 mt-2 ml-auto max-w-80 overflow-hidden outline-none sm:right-0 sm:left-auto sm:mt-3 sm:w-96 sm:max-w-96"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3.5 sm:px-5">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 id={`${popoverId}-title`} className="text-sm font-semibold">
+              <h2 id={`${popoverId}-title`} className="bento-title">
                 Notifications
               </h2>
               <span
                 aria-live="polite"
-                className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600"
+                className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900"
               >
                 {unreadCount} unread
               </span>
@@ -269,13 +281,13 @@ export default function NotificationBell() {
             <button
               type="button"
               disabled={unreadCount === 0}
-              className="text-xs font-semibold text-emerald-700 hover:underline"
+              className="ml-auto min-h-8 rounded-md px-2 text-xs font-semibold text-emerald-800 transition-colors enabled:hover:bg-emerald-50 enabled:active:bg-emerald-100"
               onClick={() => markRead(notifications.map(({ id }) => id))}
             >
               Mark all as read
             </button>
           </div>
-          <div className="max-h-[min(24rem,calc(100dvh-10rem))] overflow-y-auto overscroll-contain">
+          <div className="table-scroll max-h-[min(24rem,calc(100dvh-10rem))] overscroll-contain">
             {error && (
               <p
                 role="status"
@@ -294,23 +306,24 @@ export default function NotificationBell() {
                         markRead([item.id]);
                         setIsOpen(false);
                       }}
-                      className={`block px-4 py-3.5 hover:bg-zinc-50 focus-visible:-outline-offset-2 sm:px-5 ${item.isRead ? "" : "bg-emerald-50/65"}`}
+                      className={`block px-4 py-3 transition-colors focus-visible:-outline-offset-2 sm:px-5 ${item.isRead ? "hover:bg-zinc-50" : "bg-emerald-50/65 hover:bg-emerald-100/70"}`}
                     >
                       <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                        <span className="flex items-center gap-2 text-xs font-semibold">
+                        <span className="flex items-center gap-2 text-sm leading-snug font-semibold">
+                          <span
+                            aria-hidden="true"
+                            className={`size-2 shrink-0 rounded-full ${item.isRead ? "bg-transparent" : "bg-emerald-700"}`}
+                          />
                           {!item.isRead && (
-                            <span
-                              aria-label="Unread"
-                              className="size-1.5 rounded-full bg-emerald-600"
-                            />
+                            <span className="sr-only">Unread. </span>
                           )}
                           {item.title}
                         </span>
-                        <time className="text-[11px] text-zinc-500">
+                        <time className="caption pl-4">
                           {formatDate(item.date)}
                         </time>
                       </span>
-                      <p className="mt-1.5 text-xs leading-5 wrap-anywhere text-zinc-600">
+                      <p className="caption mt-1 pl-4 wrap-anywhere">
                         {item.message}
                       </p>
                     </Link>
@@ -318,16 +331,21 @@ export default function NotificationBell() {
                 ))}
               </ul>
             ) : (
-              !error && (
-                <p
-                  className="px-5 py-8 text-center text-sm text-zinc-600"
-                  role="status"
-                >
-                  {feed
-                    ? "You're all caught up — no notifications right now."
-                    : "Loading notifications…"}
+              !error &&
+              (feed ? (
+                <div role="status">
+                  <EmptyState
+                    Icon={BellOff}
+                    title="You’re all caught up"
+                    description="New notifications will appear here."
+                    className="py-7 sm:py-8"
+                  />
+                </div>
+              ) : (
+                <p className="caption px-5 py-8 text-center" role="status">
+                  Loading notifications…
                 </p>
-              )
+              ))
             )}
           </div>
         </section>

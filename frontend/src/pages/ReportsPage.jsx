@@ -130,9 +130,12 @@ function ReportFilters({ filters, onChange, reset, expenses }) {
   const months = uniqueValues(expenses.map(monthOf)).sort().reverse();
   const sameLabel = (keys) => keys.map((key) => [key, key]);
   return (
-    <section className="card mb-6 p-5 sm:p-6" aria-labelledby="report-filters">
+    <section
+      className="card bento-panel report-filters mb-6"
+      aria-labelledby="report-filters"
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="report-filters" className="text-base font-semibold">
+        <h2 id="report-filters" className="bento-title">
           Filters
         </h2>
         <button
@@ -144,8 +147,8 @@ function ReportFilters({ filters, onChange, reset, expenses }) {
           Reset Filters
         </button>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <div className="min-w-0 sm:col-span-2">
+      <div className="workspace-grid report-controls">
+        <div className="report-search col-span-full min-w-0">
           <label className="field-label" htmlFor="report-search">
             Search expenses
           </label>
@@ -159,7 +162,7 @@ function ReportFilters({ filters, onChange, reset, expenses }) {
               className="input pl-9"
               id="report-search"
               type="search"
-              placeholder="Title, employee, or expense ID"
+              placeholder="Title, employee, or ID"
               value={filters.query}
               onChange={(event) => onChange("query", event.target.value)}
             />
@@ -204,12 +207,14 @@ function ReportFilters({ filters, onChange, reset, expenses }) {
 
 function Kpi({ title, value, detail }) {
   return (
-    <div className="card min-w-0 px-5 py-5 sm:p-6">
-      <dt className="text-sm font-medium text-zinc-600">{title}</dt>
-      <dd className="mt-2 text-xl font-semibold wrap-anywhere tracking-tight tabular-nums text-zinc-900">
+    <div className="card bento-panel grid content-start grid-rows-subgrid row-span-3 gap-1.5">
+      <dt className="text-sm leading-snug font-medium text-zinc-700">
+        {title}
+      </dt>
+      <dd className="text-[clamp(1.25rem,1.05rem+0.7vw,1.625rem)] leading-tight font-semibold wrap-anywhere tracking-tight text-zinc-900">
         {value}
       </dd>
-      <dd className="mt-2 text-xs leading-5 text-zinc-600">{detail}</dd>
+      <dd className="caption">{detail}</dd>
     </div>
   );
 }
@@ -218,7 +223,7 @@ function ReportTable({ id, title, columns, children, preview = false, empty }) {
   return (
     <section className="card min-w-0 overflow-hidden" aria-labelledby={id}>
       <header className="card-heading">
-        <h2 id={id} className="font-semibold">
+        <h2 id={id} className="bento-title">
           {title}
         </h2>
       </header>
@@ -227,18 +232,25 @@ function ReportTable({ id, title, columns, children, preview = false, empty }) {
           tabIndex={0}
           role="region"
           aria-labelledby={id}
-          className={`overflow-auto focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-emerald-600 ${preview ? "max-h-[32rem]" : ""}`}
+          className={`table-scroll ${preview ? "max-h-[32rem]" : ""}`}
         >
           <table
-            className={`expense-table tabular-nums ${preview ? "" : "[&_td]:px-3 [&_th]:px-3 [&_th]:whitespace-normal"}`}
+            className={`expense-table ${preview ? "" : "report-breakdown-table"}`}
           >
             <thead className={preview ? "sticky top-0 bg-white" : undefined}>
               <tr>
-                {columns.map((column) => (
-                  <th key={column} scope="col">
-                    {column}
-                  </th>
-                ))}
+                {columns.map((column, index) => {
+                  const numeric = preview ? column === "Amount" : index > 0;
+                  return (
+                    <th
+                      key={column}
+                      scope="col"
+                      className={numeric ? "expense-table-number" : undefined}
+                    >
+                      {column}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>{children}</tbody>
@@ -257,24 +269,24 @@ function BreakdownRows({ rows, total, showCategoryShare }) {
         <td className="font-medium" dir="auto">
           {row.name || "Unassigned"}
         </td>
-        <td>{row.requests}</td>
-        <td className="whitespace-nowrap">
+        <td className="expense-table-number">{row.requests}</td>
+        <td className="expense-table-number whitespace-nowrap">
           {REPORT_NUMBERS.format(row.approvedCents / 100)}
         </td>
-        <td className="whitespace-nowrap">
+        <td className="expense-table-number whitespace-nowrap">
           {REPORT_NUMBERS.format(row.pendingCents / 100)}
         </td>
-        <td className="whitespace-nowrap">
+        <td className="expense-table-number whitespace-nowrap font-medium">
           {showCategoryShare
             ? REPORT_NUMBERS.format(row.spendCents / 100)
             : row.rejected}
         </td>
-        <td>
+        <td className="expense-table-number">
           {share}%
           {showCategoryShare && (
             <div
               aria-hidden="true"
-              className="mt-1.5 h-1.5 w-14 overflow-hidden rounded-full bg-emerald-100"
+              className="mt-1.5 ml-auto h-1.5 w-12 overflow-hidden rounded-full bg-emerald-100"
             >
               <div
                 className="h-full rounded-full bg-emerald-600"
@@ -340,7 +352,7 @@ export default function ReportsPage() {
               setFilters((previous) => ({ ...previous, [key]: value }))
             }
           />
-          <dl className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <dl className="workspace-grid mb-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
             <Kpi
               title="Total Spend (Excl. Rejected)"
               value={formatMoney(totals.spendCents / 100)}
@@ -362,7 +374,7 @@ export default function ReportsPage() {
               detail={`${totals.pending} awaiting manager decision`}
             />
           </dl>
-          <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          <div className="workspace-grid report-breakdowns mb-6">
             <ReportTable
               id="report-categories"
               title="Category breakdown"
@@ -380,9 +392,10 @@ export default function ReportsPage() {
               columns={DEPARTMENT_COLUMNS}
               empty={
                 !departments.length && (
-                  <p className="p-5 text-sm text-zinc-600">
-                    No departments match the current filters.
-                  </p>
+                  <EmptyState
+                    title="No matching departments"
+                    description="Department totals will appear here when expenses match the filters."
+                  />
                 )
               }
             >
@@ -407,6 +420,17 @@ export default function ReportsPage() {
                       ? "Expenses will appear here as they are submitted."
                       : "Update or reset the filters to view more expenses."
                   }
+                  action={
+                    data?.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => setFilters(EMPTY_FILTERS)}
+                      >
+                        Clear filters
+                      </button>
+                    )
+                  }
                 />
               )
             }
@@ -422,7 +446,7 @@ export default function ReportsPage() {
                 </td>
                 <td dir="auto">{expense.department || "Unassigned"}</td>
                 <td>{expense.category}</td>
-                <td className="whitespace-nowrap">
+                <td className="expense-table-number whitespace-nowrap font-semibold">
                   {expense.amount == null ? "—" : formatMoney(expense.amount)}
                 </td>
                 <td>
