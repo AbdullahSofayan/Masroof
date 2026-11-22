@@ -1,6 +1,6 @@
 # Masroof — ML Project Brief
 
-*Last updated: 18 Nov 2026 (Steps 5, 6, 7 done; hybrid model `iforest-0.1` saved; final ERD checked; contract v0.4.3) · Owner of the ML part: Jassar*
+*Last updated: 22 Nov 2026 (Steps 5, 6, 7 done; hybrid model `iforest-0.1` saved; repo + local folder checked 22 Nov; contract v0.4.3; Step 8 next) · Owner of the ML part: Jassar*
 
 **Where things stand (18 Nov):** Steps 1–2 done, Step 3 done (**contract v0.4.3**, 18 Nov — matches the **final ERD** (Abdulaziz, all 7 agreed changes in); C10 = review of Omar's first `backend/expense` code), **Step 4 done** (247,838 requests, 20 departments, 4,599 users). ✅ **Backend replied OK to the ERD changes** (18 Nov); Omar pushed a first in-memory version of `backend/expense` (18 Nov) → 4 AI fixes in contract C10. ✅ **Docs pushed to `ml/stub-service` and the team told in the group (18 Nov)** (handoff, team changes, contract). ✅ **Step 5 done (18 Nov)**: features from earlier requests only, cold-start rule with N = 5. ✅ **Step 6 done (18 Nov)**: 13 bulk buyers removed (→ 209,012 requests), **8 final features** in `models/feature_list.json`, all 10 reason codes kept. ✅ **Step 7 done (18 Nov)**: **hybrid** = Isolation Forest on 5 "unusual for this person" features + 3 same-day rules; high = model top 1%, medium = model next 1% or any rule (≈4% flagged); saved `models/isolation_forest.joblib` + `models/model_config.json` (`iforest-0.1`). Review capacity proposed to the team (high 1% ≈ 11 careful checks/week for the biggest manager); waiting for their OK. **Next: Step 8** (evaluation: planted seen + unseen anomalies, model vs rules vs both). ⚠️ Repo check 18 Nov (re-verified): mismatches in `frontend/employee-manager` and data committed in `ml/forecasting` → section 11 + `masroof_changes_for_team.md`.
 
@@ -350,6 +350,9 @@ ml/
 | Update the contract to v0.4 | ML | ✅ Done 18 Nov → v0.4.1 (C10) → v0.4.2 (Step 6) → **v0.4.3** (final ERD: no `is_active` in `users.csv`, `warnings` = `[]` not null) |
 | Are the 20 department names OK? How much history goes into the demo database? | Team / Backend | Asked (18 Nov), waiting for answers |
 | Block or warn when a request is over its category limit? | Backend + team | Asked in `step4_handoff.md` |
+| **Seed history pre-scored by ML** (still deciding, 22 Nov) (AI columns filled in `expenses.csv`) instead of `rescore_ai` on ~200k old rows: the live service would compare old requests with stats that include them and the future (leakage). Example: employee 3170's 744.90 Transportation request: z 5.87 (earlier days only) → 1.05 (whole history); of 144 requests at z ≥ 5, 69% drop below 3 | Jassar | Proposed 20 Nov, deciding |
+| **Category limits are editable in the app** (still deciding, 22 Nov) (Yousef's finance routes) → the ML split rule's copy in `model_config.json` would go out of date. Proposed fix: backend sends `category_limit` with each score request (optional field, contract B3); ML falls back to its copy if missing | Jassar → backend | Proposed 20 Nov, deciding |
+| Merge `ml/stub-service` into `main` (Pull Request) | Jassar | To do |
 | How many flags can managers review? 🆕 MF4: mentors require it | Team | Proposed 18 Nov: high = top 1% (≈11 careful checks/week for the biggest manager), ≈4% flagged in total with the rules. Used as the default in Step 7; waiting for OK |
 | 🆕 MF1: Confirm N for the cold-start rule (proposed 5) | ML | ✅ N = 5 (`MIN_HISTORY`), Step 5 |
 | The 13 very busy employees (15.7% of rows): drop from training or add a "vs usual day" count? | ML | ✅ Removed (Step 6, option A); also left out of the seed |
@@ -399,6 +402,26 @@ All 5 comments are about AI/ML.
 ---
 
 ## 11. Repo check (18 Nov)
+
+**22 Nov check (03:30):**
+- **`backend/expense` (Omar, 20 Nov 21:40, not merged):** "Connect expense workflow to MySQL". ✅ Expenses in MySQL with login; only employees create (managers blocked, C4); `category_id` (C10 #4 fixed); warnings from limits + budget; edit endpoint (Pending only) that **clears the AI columns** when details change; approve / reject save `reviewed_by`, `reviewed_at`, `manager_note`; receipts (upload, required before approval); finance can't see single expenses (correct). ⚠️ Branch is based on the old 18 Nov commit and imports `app.models` (main) + `app.routes.finance.approved_spent` (Yousef's branch) → must be merged with `main` + `backend/finance-routes` to run.
+  - ❌ **Still no ML call:** no `ai_client`, no `anomaly_service`, no background task, no `rescore_ai` → AI columns always empty.
+  - ❌ **Response exposes `anomaly_score` and `risk_level` to every role** (employee included) and has **no reasons** (`risk_justification` not returned). Contract C7: only the department's manager gets `ai = {risk_level, reasons}`, never the score.
+  - ❌ Queue sort (C8): ordered by id only. Old `anomaly_result` code still in `decision_engine` / `expense_service` (unused now).
+- **`backend/finance-routes` (Yousef, 21 Nov 01:47, not merged):** ✅ **C9 done**: `GET /dashboard/finance/anomalies?year=&month=` → counts (high/medium/low/not_scored), flagged % per department, top 5 reasons (EN+AR) — exactly the shape Majed's dashboard calls.
+- **`main` (Ziyad, 21 Nov):** UI improvements only. ❌ Manager `RiskAlertBox` unchanged (score %, `ai_analysis`). ❌ `/api/v1` prefix and `finance` role still mismatched. `USE_MOCK = true`.
+- **`ml/stub-service`:** no change; **no PR into `main` yet**; the 20 Nov brief / team-file updates are only local (not pushed).
+- **Local folder:** nothing new since Step 7 (notebooks 07, 08 still placeholders; `src/features.py` placeholder; models from Step 7).
+
+**20 Nov check (19:30):**
+- New: `main` ← Ziyad's notifications / profile / reports (no AI exposed, ✅); `backend/finance-routes` (Yousef, not merged): MySQL routes for departments, budgets (+ usage), **editable category limits**.
+- Already in place: DB columns + index + categories + `ai_service_url` (`main`, from `backend/auth-and-db`, 18 Nov); Majed's finance AI dashboard (C9/D4).
+- Still missing for the AI: backend C2–C4, C6–C9 + C10 fixes (expenses still in memory); Ziyad's manager AI box (score % still shown, `ai_analysis` shape) + queue badge; `ml/stub-service` still not in `main` (no PR).
+- Non-AI blockers (sent as reminders in the team file): frontend `/api/v1` prefix vs none in the backend; frontend role `finance` vs backend `finance_admin`; merge `backend/finance-routes`.
+- Written for the team in `masroof_changes_for_team.md` → "Repo check — 20 Nov".
+
+**19 Nov check (morning):** `main` got `backend/auth-and-db` (MySQL models matching the ERD, auth, categories at startup, `ai_service_url`) and both frontends (finance follows the contract; manager AI box doesn't).
+
 
 **Evening check (18 Nov, ~17:30):**
 - **Final ERD (Abdulaziz):** ✅ all 7 agreed changes in. ML side adjusted (contract v0.4.3): no `is_active` in `users.csv`; `warnings` saved as `[]`, never null. Backend to confirm the `(requester_id, expense_date)` index.

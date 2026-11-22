@@ -248,6 +248,48 @@ and the backend should agree on it with Majed**; it also answers the open questi
 
 ---
 
+## Repo check — 20 Nov
+
+### New since 19 Nov
+- **`main`** (Ziyad): notifications, profile page, reports page with CSV export. ✅ The reports and the export don't show the AI score or risk, which is correct.
+- **`backend/finance-routes`** (Yousef, **not merged yet**): real MySQL routes for departments, monthly budgets (+ usage) and category limits, finance-admin only. ✅ Matches the final ERD.
+
+### Already in place for the AI (thank you)
+- Database (`main`): `anomaly_score`, `risk_level`, `risk_justification` (nullable), `warnings` (default `[]`), the `(requester_id, expense_date)` index, the 6 categories created at startup, `ai_service_url` setting.
+- Finance dashboard (Majed): the "Unusual requests" AI summary follows the contract exactly (C9, D4).
+
+### Still needed for the AI to work end to end
+**Backend** (works today with the ML stub, nothing waits for the real model):
+
+| File | Contract | What |
+|---|---|---|
+| `routes/expenses.py` | C4 | Move from the in-memory list to MySQL + login; after saving, score in a **background task**; edit endpoint (re-score after edit); block managers from submitting |
+| `services/ai_client.py` (new) | C2 | Calls `POST /anomaly/score` on the ML service |
+| `services/anomaly_service.py` (new) | C3 | Fetch the same-day requests → ML → save `score` → `anomaly_score`, `risk_level`, `reason_details` → `risk_justification`; re-score the employee's other Pending requests that day |
+| `services/decision_engine.py`, `expense_service.py` | C5, C10 | Rules only (`{"warnings": [...]}`); `category` vs `category_id` |
+| `schemas/expenses.py` | C7 | `ai` field (`risk_level` + `reasons`), only for the department's manager, **never the score** |
+| Manager queue | C8 | Sort Pending: high → medium → low → not scored, then oldest first |
+| Dashboard summary endpoint (new, e.g. in `routes/finance.py`) | C9 | Counts by risk, flagged % per department, top reasons. **Majed's dashboard is already waiting for it** |
+| `app/rescore_ai.py` (new) | C6 | Scores anything that was missed (ML was down) |
+
+**Frontend (Ziyad), the manager's AI screens:**
+
+| File | Contract | What |
+|---|---|---|
+| `components/RiskAlertBox.jsx`, `pages/manager/ExpenseReviewPage.jsx` | D2, D3 | Badge + `ai.reasons` (EN/AR) as one section, policy `warnings` as a separate section; **remove "Anomaly score: 74%"**; read `expense.ai` instead of `ai_analysis` |
+| Manager queue (`ExpenseTable` / `ManagerDashboard`) | D2, C8 | Risk badge per row, riskiest first |
+| `services/mockData.js` | D7 | Mock in the new shape: `ai: {risk_level: "high", reasons: [...]}`, lowercase, no score |
+
+### Reminders (not about the AI, but they block connecting the frontend to the real backend)
+1. **URL prefix:** the frontend calls `http://localhost:8000/api/v1/...`, but the backend routes have no `/api/v1` prefix (`/auth`, `/users`, `/expenses`). Pick one.
+2. **Role name:** the frontend's permissions use the role `finance`, but the backend sends `finance_admin`. A finance admin logging into the real backend gets no access, so the finance dashboard (with the AI summary) won't open.
+3. **Merge `backend/finance-routes`** into `main` (departments, budgets, limits).
+4. Still open from before: the C10 AI fixes, the `ml/forecasting` data files in git, the forecast API to agree between Abdullah, Majed and the backend.
+
+ML side: the ML folder (`ml/stub-service`) will be merged into `main` with a Pull Request, so the ML service can be started from the same checkout.
+
+---
+
 ## Please tell ML when
 
 - MySQL and the ML call are added on `backend/expense` (ML will check it again)
