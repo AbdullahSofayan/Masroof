@@ -4,7 +4,7 @@
 
 **✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below, and the final ERD (Abdulaziz, 18 Nov evening) has all of them.** Omar's first code is on `backend/expense` (18 Nov) → checked in **"Repo check — 18 Nov (afternoon)"** at the end: 4 changes for the AI part.
 
-**🆕 Latest (23 Nov):** the model is finished and tested → see **"Update — 23 Nov"** near the end (3 new reason codes, how many requests get flagged, 2 questions for the backend).
+**🆕 Latest (23 Nov):** the model is finished and tested → see **"Update — 23 Nov"** near the end (3 new reason codes, how many requests get flagged, `category_limit` to send, 1 question for the backend).
 
 These changes let the backend store and show the AI model's results correctly.
 Each one has a reason, so you can push back if something doesn't fit.
@@ -97,7 +97,7 @@ backend reject it, so a request never sits in "Pending" forever.
 - The ML service **never connects to the database** — the backend sends the data.
 - Score in a **background task** after a request is created or edited, so the employee never waits.
 - If the ML service is down, **save the request anyway** with no AI result, and score it later.
-- Full details: `ml/docs/ml_contract.md` (**v0.4.3**, matches the final ERD) on the `ml/stub-service` branch.
+- Full details: `ml/docs/ml_contract.md` (**v0.4.5**, matches the final ERD) on the `ml/stub-service` branch.
   Backend → Parts B, C, E · Frontend → Part D. Part C is reference code written against the ERD; **C10** checks it against Omar's first `backend/expense` code.
 
 ---
@@ -292,15 +292,20 @@ ML side: the ML folder (`ml/stub-service`) will be merged into `main` with a Pul
 
 ---
 
-## Update — 23 Nov (ML Step 8 finished) · contract v0.4.4
+## Update — 23 Nov (ML Step 8 finished) · contract v0.4.4 → v0.4.5
 
-The model is tested and its settings are final (`iforest-0.2`). Nothing in the request or response shape changed.
+The model is tested and its settings are final (`iforest-0.2`). The response shape didn't change; the request gets one optional field (`category_limit`, point 5).
 
 **What changed for you:**
 1. **3 new reason codes** (13 in total, contract B7): `duplicate_recent_request` (same amount + category as a request a few days earlier), `unusual_amount_digits` (amount looks made up, e.g. 1,111.11), `returning_after_long_break` (first request after 90+ days). The EN/AR texts come from the API in `reason_details`, so **the frontend needs no change**; just don't hard-code a list of codes.
 2. **How many requests get flagged:** ≈1% **high** (careful check) and ≈3.5% **medium** (quick look); ≈5% in total in the most recent months. For the biggest department that's ≈11 high + ≈51 medium per week; for a typical department < 1 high + ≈4 medium. Tell ML if that's too many to review.
 3. **A split request now gives `medium`** (with the split reason), not `high`. The stub still forces `high` for 2+ same-category requests on one day; that's only a testing hook.
-4. **Backend sends nothing new.** The new time rules (receipt reused within 7 days, 90+ days without requests) use history the ML service keeps itself.
+4. The new time rules (receipt reused within 7 days, 90+ days without requests) use history the ML service keeps itself: **nothing new to send for them.**
+5. 🆕 **Backend: please send `category_limit` with each score request** (contract v0.4.5, B3 + C2). The finance admin can edit limits, and ML can't read the database, so without it the split rule would use old limits (e.g. Food raised to 3,000 → three 900 SAR requests still flagged as a split). It's one line in `ai_client._payload`:
+   ```python
+   "category_limit": (str(expense.category.expense_limit.max_amount) if expense.category.expense_limit else None),
+   ```
+   Optional: if it's missing, ML uses its own copy of the limits. The ML stub already accepts it.
 
 **How it was tested (for the presentation):** planted anomalies in the real history; two "unseen" sets made blind by an independent reviewer; the model alone vs simple rules vs both at the same number of flags; and a blind hand-check of 30 requests. The hybrid caught 86% of the planted cases while flagging ≈4.5%; simple policy rules caught 94% but flagged 16% (almost 4× the reviews). All numbers are in `ml/models/evaluation_summary.json`.
 
@@ -311,9 +316,8 @@ The model is tested and its settings are final (`iforest-0.2`). Nothing in the r
 - ❌ Manager queue sort (C8). Ziyad's `RiskAlertBox` still shows the score %.
 - `backend/expense` needs `main` + `backend/finance-routes` merged in to run.
 
-**Two questions from ML (please answer before the real model, Step 9):**
+**One question from ML (please answer before the real model, Step 9):**
 - (a) **Seed history:** can ML send `expenses.csv` with the AI columns already filled, instead of running `rescore_ai` on ~200k old rows? Scoring old rows live would compare each one with stats that already include it and later months, which makes old requests look more normal than they were.
-- (b) **Category limits are editable** (Yousef's routes). Can the backend send the current `category_limit` with each score request (optional field)? Otherwise the ML split rule uses its own copy of the 6 limits.
 
 ML side: PR `ml/stub-service` → `main` is open (only adds `ml/`); please review and merge it.
 

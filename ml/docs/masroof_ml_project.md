@@ -1,8 +1,8 @@
 # Masroof — ML Project Brief
 
-*Last updated: 23 Nov 2026 (Steps 1–8 done; final hybrid `iforest-0.2` with 6 rules; contract v0.4.4; Step 9 next) · Owner of the ML part: Jassar*
+*Last updated: 23 Nov 2026 (Steps 1–8 done; final hybrid `iforest-0.2` with 6 rules; contract v0.4.5; Step 9 next) · Owner of the ML part: Jassar*
 
-**🆕 Where things stand (23 Nov):** ✅ **Step 8 done.** Evaluation finished (seen planted, 2 blind unseen rounds by independent agents, model vs rules vs both, blind hand-check). It added **3 rules + 3 reason codes** (13 codes now) and trimmed the model's medium share to 0.5%. Final: **high 1.00%, medium 3.47% (≈4.5% flagged; ≈5% in Jan–Jun 2026)**. All numbers in `models/evaluation_summary.json` and Step 8 below. `src/features.py` (v2) now holds all the feature + rule code, and `src/predict.py` (stub) has the 13 codes. PR `ml/stub-service` → `main` is open (main merged in, 29 files, additions only); a teammate merges it. **Next: Step 9** (real ML service). Still deciding: (a) pre-scored seed, (b) backend sends `category_limit`.
+**🆕 Where things stand (23 Nov):** ✅ **Step 8 done.** Evaluation finished (seen planted, 2 blind unseen rounds by independent agents, model vs rules vs both, blind hand-check). It added **3 rules + 3 reason codes** (13 codes now) and trimmed the model's medium share to 0.5%. Final: **high 1.00%, medium 3.47% (≈4.5% flagged; ≈5% in Jan–Jun 2026)**. All numbers in `models/evaluation_summary.json` and Step 8 below. `src/features.py` (v2) now holds all the feature + rule code, and `src/predict.py` (stub) has the 13 codes. PR `ml/stub-service` → `main` is open (main merged in, 29 files, additions only); a teammate merges it. **Next: Step 9** (real ML service). ✅ Decided (b): the backend sends the current `category_limit` with each score request (contract v0.4.5). Still deciding: (a) pre-scored seed.
 
 **Where things stand (18 Nov):** Steps 1–2 done, Step 3 done (**contract v0.4.3**, 18 Nov — matches the **final ERD** (Abdulaziz, all 7 agreed changes in); C10 = review of Omar's first `backend/expense` code), **Step 4 done** (247,838 requests, 20 departments, 4,599 users). ✅ **Backend replied OK to the ERD changes** (18 Nov); Omar pushed a first in-memory version of `backend/expense` (18 Nov) → 4 AI fixes in contract C10. ✅ **Docs pushed to `ml/stub-service` and the team told in the group (18 Nov)** (handoff, team changes, contract). ✅ **Step 5 done (18 Nov)**: features from earlier requests only, cold-start rule with N = 5. ✅ **Step 6 done (18 Nov)**: 13 bulk buyers removed (→ 209,012 requests), **8 final features** in `models/feature_list.json`, all 10 reason codes kept. ✅ **Step 7 done (18 Nov)**: **hybrid** = Isolation Forest on 5 "unusual for this person" features + 3 same-day rules; high = model top 1%, medium = model next 1% or any rule (≈4% flagged); saved `models/isolation_forest.joblib` + `models/model_config.json` (`iforest-0.1`). Review capacity proposed to the team (high 1% ≈ 11 careful checks/week for the biggest manager); waiting for their OK. **Next: Step 8** (evaluation: planted seen + unseen anomalies, model vs rules vs both). ⚠️ Repo check 18 Nov (re-verified): mismatches in `frontend/employee-manager` and data committed in `ml/forecasting` → section 11 + `masroof_changes_for_team.md`.
 
@@ -63,6 +63,7 @@ Mapping: ML `score` → `anomaly_score`, `risk_level` → `risk_level`, `reason_
 | Forecasting | Not Jassar's part | Another teammate |
 | Score precision | **Unrounded** (Jassar removed `round(score, 3)`) | Keep it unrounded in the real model too |
 | Approval flow (new ERD) | **One step: department manager** | finance_admin sets budgets + sees the dashboard; managers don't submit expenses |
+| Category limits for the split rule (23 Nov) | **Backend sends the current `category_limit` with each score request** (optional; ML falls back to its copy in `model_config.json`) | Limits are editable in the app and ML never reads the DB, so ML's copy would go out of date (e.g. Food 2,000 → 3,000: 3 × 900 SAR would still be flagged as a split). Only the split rule uses it, so no retraining when a limit changes |
 
 ---
 
@@ -114,7 +115,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 |---|---|---|---|
 | 1 | Data Exploration | notebooks/01_data_exploration | ✅ Done |
 | 2 | Data Cleaning | notebooks/02_data_cleaning | ✅ Done |
-| 3 | Team Contract + Stub | docs/ml_contract.md, src/service.py, src/predict.py | ✅ Done — **contract v0.4.4** (23 Nov): written for the new ERD; C10 reviews Omar's first code; v0.4.2 = Step 6, v0.4.3 = final ERD, **v0.4.4 = Step 8** (13 reason codes, real risk levels, split = medium) |
+| 3 | Team Contract + Stub | docs/ml_contract.md, src/service.py, src/predict.py | ✅ Done — **contract v0.4.5** (23 Nov): written for the new ERD; C10 reviews Omar's first code; v0.4.2 = Step 6, v0.4.3 = final ERD, v0.4.4 = Step 8 (13 reason codes, real risk levels, split = medium), **v0.4.5 = optional `category_limit`** |
 | 4 | Category Mapping + Localization | notebooks/03_localization | ✅ Done (17 Nov) |
 | 5 | Feature Engineering | notebooks/04_feature_engineering | ✅ Done (18 Nov) · 🆕 MF1 done |
 | 6 | Feature Selection | notebooks/05_feature_selection | ✅ Done (18 Nov) |
@@ -250,7 +251,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 - ✅ Feature code already in `src/features.py` (Step 8). Real `predict.py` loads `isolation_forest.joblib` + `model_config.json` and calls `features.py`.
 - The 3 time rules need each employee's last requests (same amount within 7 days, last request date) → the service keeps them in its saved stats (backend sends nothing new).
 - **Pin `scikit-learn==1.9.1`** in `requirements.txt` (the saved model may not load in another version).
-- Decide: the ML service keeps its own copy of the 6 category limits (in `model_config.json`), or the backend sends the limit with each request (small contract change).
+- ✅ Decided: the backend sends `category_limit` (optional) with each request (contract v0.4.5, B3 + C2). In Step 9: add `category_limit: Decimal | None = None` to `ScoreRequest` in `service.py` and pass it to the split rule; missing → `cfg["category_limits"]`. (The stub already accepts the field: pydantic ignores unknown fields.)
 - Contract ✅ v0.4.4 says a split gives **medium**; the stub still forces high (testing hook) → the real service follows the config.
 - Real `src/predict.py` behind the **same endpoints**; save model + per-employee/department/category stats.
 - 🆕 **MF1:** saved stats = history up to the last training date; a new request is compared only with requests before it, and the cold-start rule from Step 5 is in `features.py` (same code for training and serving).
@@ -263,7 +264,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 
 ---
 
-## 5. The ML service (contract v0.4.4 summary)
+## 5. The ML service (contract v0.4.5 summary)
 
 **Run:** `uvicorn src.service:app --port 8001 --reload` → docs at http://localhost:8001/docs
 **Backend .env:** `AI_SERVICE_URL=http://localhost:8001`
@@ -276,7 +277,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 | GET | `/anomaly/categories` | the 6 accepted names |
 | GET | `/anomaly/reasons` | all reason codes, EN + AR |
 
-**Request:** `expense_id, requester_id, department_id (nullable), category, amount (SAR), expense_date, same_day_requests[]`
+**Request:** `expense_id, requester_id, department_id (nullable), category, amount (SAR), expense_date, same_day_requests[]`, 🆕 `category_limit` (optional, the current limit from `expense_limits`; missing → ML's copy)
 (`same_day_requests` = the requester's other requests for the same date, any status, excluding this one.)
 
 **Response:** `expense_id, score (0–1), risk_level (low/medium/high), is_flagged, reasons (EN), reason_details (code + EN + AR), model_version`
@@ -373,7 +374,7 @@ ml/
 | Are the 20 department names OK? How much history goes into the demo database? | Team / Backend | Asked (18 Nov), waiting for answers |
 | Block or warn when a request is over its category limit? | Backend + team | Asked in `step4_handoff.md` |
 | **Seed history pre-scored by ML** (still deciding, 22 Nov) (AI columns filled in `expenses.csv`) instead of `rescore_ai` on ~200k old rows: the live service would compare old requests with stats that include them and the future (leakage). Example: employee 3170's 744.90 Transportation request: z 5.87 (earlier days only) → 1.05 (whole history); of 144 requests at z ≥ 5, 69% drop below 3 | Jassar | Proposed 20 Nov, deciding |
-| **Category limits are editable in the app** (still deciding, 22 Nov) (Yousef's finance routes) → the ML split rule's copy in `model_config.json` would go out of date. Proposed fix: backend sends `category_limit` with each score request (optional field, contract B3); ML falls back to its copy if missing | Jassar → backend | Proposed 20 Nov, deciding |
+| **Category limits are editable in the app** (Yousef's finance routes) → the ML split rule's copy in `model_config.json` would go out of date. Fix: backend sends `category_limit` with each score request (optional field, contract B3, code in C2); ML falls back to its copy if missing | Jassar → backend | ✅ Decided 23 Nov (contract v0.4.5). Backend to add the field to `_payload` |
 | Merge `ml/stub-service` into `main` (Pull Request) | Jassar → a teammate merges | 🟡 PR open (main merged into the branch first; 29 files, additions only) |
 | How many flags can managers review? 🆕 MF4: mentors require it | Team | Proposed: high = top 1% (≈11 careful checks/week for the biggest manager). After Step 8: ≈4.5% flagged overall, **≈5% in recent months** (above the ≈4% first proposed) → tell the team; used as the default; waiting for OK |
 | 🆕 MF1: Confirm N for the cold-start rule (proposed 5) | ML | ✅ N = 5 (`MIN_HISTORY`), Step 5 |

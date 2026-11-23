@@ -1,7 +1,7 @@
 # ML Contract — Masroof Anomaly Detection
 
 **Owner:** ML (Jassar) · **For:** Backend (`backend/expense`, `backend/finance`), Frontend (`frontend/employee-manager`)
-**Version:** v0.4.4 — 23 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code · v0.4.4 = Step 8 results: 13 reason codes, real risk levels (model `iforest-0.2`)
+**Version:** v0.4.5 — 23 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code · v0.4.4 = Step 8 results: 13 reason codes, real risk levels (model `iforest-0.2`) · v0.4.5 = optional `category_limit` in the score request
 **Stub:** the ML service works now with fake scores (`stub-0.2`). The real model (Step 9) keeps the same endpoints and fields.
 
 Everything the backend and frontend need from ML is in this file.
@@ -159,7 +159,8 @@ own prefix later, behind the same `AI_SERVICE_URL`.
   "expense_date": "2026-06-25",
   "same_day_requests": [
     {"expense_id": 347900, "category": "Office Supplies", "amount": "2400.00"}
-  ]
+  ],
+  "category_limit": "3000.00"
 }
 ```
 
@@ -172,6 +173,13 @@ own prefix later, behind the same `AI_SERVICE_URL`.
 | `amount` | decimal > 0 | `expense.amount` | SAR |
 | `expense_date` | `YYYY-MM-DD` | `expense.expense_date` | |
 | `same_day_requests` | list | query in C3 | The employee's **other** requests with the same `expense_date`, **any status**, **not including this one**. `[]` if none |
+| `category_limit` | decimal > 0 or null, **optional** | `expense_limits.max_amount` for this category (via `expense.category.expense_limit`) | 🆕 v0.4.5. The **current** limit, so the split rule uses the same limit as the backend's own warning. Missing or null → ML uses its copy of the E5 limits |
+
+**Why `category_limit` (v0.4.5):** the finance admin can edit limits in the app, but ML never reads the database. Without this field,
+ML's copy of the limits goes out of date after an edit: e.g. Food raised 2,000 → 3,000, three 900 SAR Food requests on one day
+would still be flagged "possible split to stay under a limit" although they're under the new limit. The limit is used **only by
+the split rule**, not by the model (no retraining when a limit changes). One value covers the day's requests: the split rule only
+looks at same-category requests, and they share one limit.
 
 Rejected requests are included on purpose: someone who splits a request and gets one part rejected is
 still splitting.
@@ -323,6 +331,9 @@ def _payload(expense, same_day) -> dict:
             {"expense_id": e.id, "category": e.category.name, "amount": str(e.amount)}
             for e in same_day
         ],
+        # current limit of this category (editable by finance_admin); None if the category has no limit
+        "category_limit": (str(expense.category.expense_limit.max_amount)
+                           if expense.category.expense_limit else None),
     }
 
 
@@ -901,6 +912,8 @@ and `expenses.csv`. Their ids are simply unused — don't reuse them for test us
 
 Set near the 95th percentile of real amounts, so ~5% of requests go over — rare enough that a warning
 means something. **A limit applies to one request at a time** (not a daily or monthly total).
+These are the starting values. When the finance admin edits a limit, the backend sends the new one with each score request
+(`category_limit`, B3); ML keeps these values only as a fallback (`model_config.json`).
 
 ## E6. Budget (proposal — team decides)
 
@@ -939,7 +952,8 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
   The stub still forces `high` for 2+ same-category requests (F1): that's a testing hook only.
 - 13 reason codes (B7). Up to 3 per request, rules first, then the model's strongest reasons.
 - The new time rules (receipt reused within 7 days, 90+ days without requests) need each employee's recent requests:
-  **the ML service keeps them itself** (it sees every request it scores), so the backend sends nothing new.
+  **the ML service keeps them itself** (it sees every request it scores), so the backend sends nothing new for them.
+- The split rule uses `category_limit` from the request (B3) when it's sent, otherwise ML's copy of the E5 limits.
 
 ## F3. Mentor feedback that touches this contract
 
@@ -956,7 +970,7 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 |---|---|---|
 | How many flagged requests can a manager realistically review per week? (MF4) | Team | Proposed: high = top 1% (≈11 careful checks/week for the biggest department, < 1 for a typical one); ≈5% flagged in total with the rules. Used as the default; waiting for OK |
 | Seed history pre-scored by ML (AI columns filled in `expenses.csv`) instead of `rescore_ai` on old rows (E2/E4) | ML → backend | Proposed by ML, deciding |
-| Backend sends the current `category_limit` with each score request (limits are editable in the app) (B3) | ML → backend | Proposed by ML, deciding |
+| Backend sends the current `category_limit` with each score request (limits are editable in the app) (B3) | ML → backend | ✅ Decided (23 Nov): optional field in B3, code in C2. Backend: add it to `_payload`. ML falls back to its copy if missing |
 | How much history goes into the demo database? (E7) | Team / Backend | Open |
 | Block or warn when a request is over its category limit? Add the same-day total rule? (C5) | Backend + team | Open |
 | Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Open |
@@ -972,6 +986,7 @@ file, then tells both teams. The version at the top goes up with every change.
 
 | Version | Date | Changes |
 |---|---|---|
+| v0.4.5 | 23 Nov | Decided: optional `category_limit` in the score request (B3), sent from `expense_limits` in `_payload` (C2); E5 limits become ML's fallback (E5, F2, F4) |
 | v0.4.4 | 23 Nov | Step 8 results: 13 reason codes (+3: `duplicate_recent_request`, `unusual_amount_digits`, `returning_after_long_break`) (B7); real risk levels + split = medium (A1, F2); open ML proposals in F4 |
 | v0.4.3 | 18 Nov | Final ERD check (all agreed changes in): `users.csv` without `is_active` (not in the ERD); `warnings` saved as `[]` instead of null (C5, D1, E2) |
 | v0.4.2 | 18 Nov | Step 6 results: the 10 reason codes are final (B7, F2); `amount_high_for_department` text → "…for this department in this category" (used for new employees); A1 wording; 13 bulk buyers left out of the seed (E3) |
