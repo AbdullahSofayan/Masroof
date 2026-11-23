@@ -1,6 +1,8 @@
 # Masroof — ML Project Brief
 
-*Last updated: 22 Nov 2026 (Steps 5, 6, 7 done; hybrid model `iforest-0.1` saved; repo + local folder checked 22 Nov; contract v0.4.3; Step 8 next) · Owner of the ML part: Jassar*
+*Last updated: 23 Nov 2026 (Steps 1–8 done; final hybrid `iforest-0.2` with 6 rules; contract v0.4.4; Step 9 next) · Owner of the ML part: Jassar*
+
+**🆕 Where things stand (23 Nov):** ✅ **Step 8 done.** Evaluation finished (seen planted, 2 blind unseen rounds by independent agents, model vs rules vs both, blind hand-check). It added **3 rules + 3 reason codes** (13 codes now) and trimmed the model's medium share to 0.5%. Final: **high 1.00%, medium 3.47% (≈4.5% flagged; ≈5% in Jan–Jun 2026)**. All numbers in `models/evaluation_summary.json` and Step 8 below. `src/features.py` (v2) now holds all the feature + rule code, and `src/predict.py` (stub) has the 13 codes. PR `ml/stub-service` → `main` is open (main merged in, 29 files, additions only); a teammate merges it. **Next: Step 9** (real ML service). Still deciding: (a) pre-scored seed, (b) backend sends `category_limit`.
 
 **Where things stand (18 Nov):** Steps 1–2 done, Step 3 done (**contract v0.4.3**, 18 Nov — matches the **final ERD** (Abdulaziz, all 7 agreed changes in); C10 = review of Omar's first `backend/expense` code), **Step 4 done** (247,838 requests, 20 departments, 4,599 users). ✅ **Backend replied OK to the ERD changes** (18 Nov); Omar pushed a first in-memory version of `backend/expense` (18 Nov) → 4 AI fixes in contract C10. ✅ **Docs pushed to `ml/stub-service` and the team told in the group (18 Nov)** (handoff, team changes, contract). ✅ **Step 5 done (18 Nov)**: features from earlier requests only, cold-start rule with N = 5. ✅ **Step 6 done (18 Nov)**: 13 bulk buyers removed (→ 209,012 requests), **8 final features** in `models/feature_list.json`, all 10 reason codes kept. ✅ **Step 7 done (18 Nov)**: **hybrid** = Isolation Forest on 5 "unusual for this person" features + 3 same-day rules; high = model top 1%, medium = model next 1% or any rule (≈4% flagged); saved `models/isolation_forest.joblib` + `models/model_config.json` (`iforest-0.1`). Review capacity proposed to the team (high 1% ≈ 11 careful checks/week for the biggest manager); waiting for their OK. **Next: Step 8** (evaluation: planted seen + unseen anomalies, model vs rules vs both). ⚠️ Repo check 18 Nov (re-verified): mismatches in `frontend/employee-manager` and data committed in `ml/forecasting` → section 11 + `masroof_changes_for_team.md`.
 
@@ -112,13 +114,13 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 |---|---|---|---|
 | 1 | Data Exploration | notebooks/01_data_exploration | ✅ Done |
 | 2 | Data Cleaning | notebooks/02_data_cleaning | ✅ Done |
-| 3 | Team Contract + Stub | docs/ml_contract.md, src/service.py, src/predict.py | ✅ Done — **contract v0.4.2** (18 Nov): written for the new ERD; C10 reviews Omar's first code; v0.4.2 = Step 6 results (reason codes final, department text, seed without the 13 bulk buyers) |
+| 3 | Team Contract + Stub | docs/ml_contract.md, src/service.py, src/predict.py | ✅ Done — **contract v0.4.4** (23 Nov): written for the new ERD; C10 reviews Omar's first code; v0.4.2 = Step 6, v0.4.3 = final ERD, **v0.4.4 = Step 8** (13 reason codes, real risk levels, split = medium) |
 | 4 | Category Mapping + Localization | notebooks/03_localization | ✅ Done (17 Nov) |
 | 5 | Feature Engineering | notebooks/04_feature_engineering | ✅ Done (18 Nov) · 🆕 MF1 done |
 | 6 | Feature Selection | notebooks/05_feature_selection | ✅ Done (18 Nov) |
 | 7 | Model Training | notebooks/06_model_training | ✅ Done (18 Nov) · hybrid · 🆕 MF4 cut-offs from capacity (team to confirm 1% / ~4%) |
-| 8 | Evaluation + Reasons | notebooks/07_evaluation | ⬜ Next · 🆕 MF3, MF4 |
-| 9 | ML Service (real model) | notebooks/08_model_export, src/ | ⬜ · 🆕 MF1 |
+| 8 | Evaluation + Reasons | notebooks/07_evaluation | ✅ Done (23 Nov) · 🆕 MF3, MF4 done |
+| 9 | ML Service (real model) | notebooks/08_model_export, src/ | ⬜ Next · 🆕 MF1 |
 | 10 | Demo Request Generator | src/demo_generator.py | ⬜ |
 
 ### What each step does, and what to share / get
@@ -224,12 +226,32 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 - 🆕 **MF4 — model vs rules vs both:** compare the Step 7 model alone, the Step 7 rules alone, and the hybrid on the same planted anomalies, **at the same number of flags**. Show what each catches that the other misses (Step 7 already shows they barely overlap: 0.13%).
 - Compute which features made each request unusual → reason codes; finalize EN/AR texts.
 - 📤 Share: reason texts, evaluation numbers/charts, demo cases. 📥 Get: frontend feedback on texts.
+- ✅ **Results (Step 8, 19–23 Nov, notebook 07, cells 8.1–8.31):**
+  - **Code moved to `src/features.py`** (v2): `build_features` (rebuilds `features.csv` with 0.0 difference), `model_input`, `apply_rules`, `risk_levels`, `find_bulk_buyers`, `digits_pattern`. The notebooks and (Step 9) the service import it.
+  - **Reasons:** "what-if" test per request (set one feature back to its normal value; if the score drops ≥ 0.02 the feature is a reason) + a sanity check per reason; max 3; rules first; the amount code is picked by the cascade level the request was compared with (`baseline_level`).
+  - **Seen planted anomalies** (6 patterns, planted in real history). "Too big" planted in **spreads** (k × the person's usual spread), because one employee's log spread is ≈1.29 (6–10× usual is often normal for them). At the same flag budget (hybrid flags 4.47% of real data):
+
+    | System | Seen caught | Real flagged |
+    |---|---|---|
+    | **Hybrid** | **86%** | 4.47% |
+    | Model only | 55% | same budget |
+    | Rules only | 42% | same budget |
+    | Policy rules (no ML: over limit, weekend, round…) | 94% | **16.43%** (3.7× the reviews) |
+
+    Hybrid by pattern: too big 69% (k=2 → 4%, k=3 → 46%, k=4 → 94%, k≥5 → 100%), split 100%, duplicate 100%, new category + big 70%, weekend + round 100%, many requests 100%.
+  - **Unseen round 1** (blind, made by an independent agent, `data/unseen/`): hybrid **0/126**, model only 2%, policy rules 12%; 0 of 25 normal controls flagged. Patterns: creeping escalation, cross-day duplicate, dormant reactivation, fixed monthly repeat, micro probe claims, patterned digits. → **3 new rules + codes:** `duplicate_recent_request` (same employee + category + amount within 1–7 days, ≥ 1,000 SAR), `unusual_amount_digits` (repeated / sequential digits as typed, ≥ 100), `returning_after_long_break` (first request after 90+ days). After the fix: dormant 100%, digits 64%, cross-day duplicate 9%.
+  - **Unseen round 2** (blind, new agent, `data/unseen_round2/`, made *after* the fix): hybrid **1/142 (0.7%)** (via `returning_after_long_break`), policy rules 2%; 0 of 25 controls flagged. Patterns: colleague receipt reuse, daily personal meals, Eid holiday purchase, quarter-end budget burn, retail-price gadget, shared-bill double claim, weekend-stretched trip. **Honest limit:** these need context the data doesn't have (receipts, other employees' requests, calendar, prices) → future work, not more rules.
+  - **Blind hand-check** (independent agent, 30 rows: 10 high, 10 medium, 10 unflagged controls, levels hidden; `data/evaluation/hand_check_review.csv`): high 1 suspicious / 2 can't tell / 7 normal; medium 1 / 1 / 8; low 0 / 0 / 10. The 2 suspicious: hotel 4,695 SAR on a weekend; 34,555 SAR, one of 6 same-day charges (the split rule caps at 5 parts). → flagged real rows are **"unverified"** (MF3); most look normal to a human without receipts.
+  - **Final settings (`model_config.json`, `iforest-0.2`):** high = model top 1% (`high_from` 0.6639); medium = model next **0.5%** (`medium_from` 0.6513, `model_flag_share` 0.015) **or** any of 6 rules → **high 1.00%, medium 3.47%, low 95.52%**. Monthly flagged ≈3.5–4.3% (Jul–Dec 2025), ≈5.0–5.3% (Jan–Jun 2026); high ≈1% every month. Per week (Jan–Jun 2026): biggest department 11.3 high + 51.4 medium; median department 0.7 high + 3.8 medium. Departments 20 and 17 run ≈12% flagged (mostly same-day duplicates).
+  - **Saved:** `models/evaluation_summary.json` (every number above, `ensure_ascii=False`).
+  - **Known display issue (fix in Step 9 export):** in history, `round_amount` and digits are checked on the USD amount (e.g. 3,750 SAR = $1,000 → "round"). Show those reasons only if the SAR amount qualifies.
 
 **Step 9 — Real ML service**
-- Move feature code to `src/features.py` (one source of truth for training and serving), incl. `model_input()` (one-sided floors) and the 3 rules; `predict.py` loads `isolation_forest.joblib` + `model_config.json`.
+- ✅ Feature code already in `src/features.py` (Step 8). Real `predict.py` loads `isolation_forest.joblib` + `model_config.json` and calls `features.py`.
+- The 3 time rules need each employee's last requests (same amount within 7 days, last request date) → the service keeps them in its saved stats (backend sends nothing new).
 - **Pin `scikit-learn==1.9.1`** in `requirements.txt` (the saved model may not load in another version).
 - Decide: the ML service keeps its own copy of the 6 category limits (in `model_config.json`), or the backend sends the limit with each request (small contract change).
-- Contract: a split now gives at least **medium** (high only if the model also finds the request unusual); the stub still forces high, so update its testing hooks and B/F text.
+- Contract ✅ v0.4.4 says a split gives **medium**; the stub still forces high (testing hook) → the real service follows the config.
 - Real `src/predict.py` behind the **same endpoints**; save model + per-employee/department/category stats.
 - 🆕 **MF1:** saved stats = history up to the last training date; a new request is compared only with requests before it, and the cold-start rule from Step 5 is in `features.py` (same code for training and serving).
 - **Saved stats format:** per group (employee, employee + category, department, department + category, category): **n, sum, sum of squares** of `log_amount` (stored next to the model in `models/`). New request → look up its groups → same cascade as Step 5 (an unknown new employee has n = 0 → department in category). After a request is saved, add it to the sums (updating = addition). Save the updated stats to the file so a restart doesn't lose them (enough for the demo).
@@ -241,7 +263,7 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 
 ---
 
-## 5. The ML service (contract v0.4.2 summary)
+## 5. The ML service (contract v0.4.4 summary)
 
 **Run:** `uvicorn src.service:app --port 8001 --reload` → docs at http://localhost:8001/docs
 **Backend .env:** `AI_SERVICE_URL=http://localhost:8001`
@@ -271,9 +293,9 @@ With the 6 categories: 32% of purchases fit none (Professional Services, Lab & M
 - **Seed IDs must be kept** — the model remembers employees/departments by ID.
 - Backend integration code (Part C) was tested against the stub on ERD-shaped tables (SQLite): works.
 
-**Reason codes (all 10 kept after Step 6; which feature drives each → Step 6):** `amount_high_for_employee`, `amount_high_for_employee_category`, `amount_high_for_department`, `large_amount`, `unusual_category_for_employee`, `weekend_expense`, `round_amount`, `duplicate_request`, `possible_split_request`, `many_requests_same_day`.
+**Reason codes (13 after Step 8):** `amount_high_for_employee`, `amount_high_for_employee_category`, `amount_high_for_department`, `large_amount`, `unusual_category_for_employee`, `weekend_expense`, `round_amount`, `duplicate_request`, `possible_split_request`, `many_requests_same_day`, 🆕 `duplicate_recent_request`, `unusual_amount_digits`, `returning_after_long_break`.
 
-**Risk cut-offs (Step 7, `iforest-0.1`):** high = model score ≥ 0.6639 (top 1%); medium = score ≥ 0.6412 (next 1%) **or** any rule (split / duplicate / many requests). ≈4% flagged. The stub still uses 0.60 / 0.80 until Step 9.
+**Risk cut-offs (Step 8, `iforest-0.2`):** high = model score ≥ 0.6639 (top 1%); medium = score ≥ 0.6513 (next 0.5%) **or** any of 6 rules (split, same-day duplicate, many requests, duplicate within 7 days, made-up digits, 90+ day break). 1.00% high + 3.47% medium (≈5% in recent months). The stub still uses 0.60 / 0.80 until Step 9.
 
 **Category limits (checked in Step 4, ~p95):** Office Supplies 3,000 · IT & Telecom 7,500 · Equipment & Maintenance 7,500 · Food 2,000 · Transportation 5,000 · Travel 10,000 SAR. (Earlier guesses were too strict — e.g. Transportation 1,500 would flag 16% of normal requests.)
 
@@ -316,7 +338,7 @@ ml/
 ├── src/
 │   ├── service.py      (FastAPI app)
 │   ├── predict.py      (stub scoring logic)
-│   └── features.py     (Step 9)
+│   └── features.py     (✅ Step 8: features + rules, used by training and serving)
 ├── Dockerfile, .dockerignore, .gitignore
 ├── requirements.txt              (service)
 ├── requirements-notebooks.txt    (notebooks)
@@ -352,8 +374,8 @@ ml/
 | Block or warn when a request is over its category limit? | Backend + team | Asked in `step4_handoff.md` |
 | **Seed history pre-scored by ML** (still deciding, 22 Nov) (AI columns filled in `expenses.csv`) instead of `rescore_ai` on ~200k old rows: the live service would compare old requests with stats that include them and the future (leakage). Example: employee 3170's 744.90 Transportation request: z 5.87 (earlier days only) → 1.05 (whole history); of 144 requests at z ≥ 5, 69% drop below 3 | Jassar | Proposed 20 Nov, deciding |
 | **Category limits are editable in the app** (still deciding, 22 Nov) (Yousef's finance routes) → the ML split rule's copy in `model_config.json` would go out of date. Proposed fix: backend sends `category_limit` with each score request (optional field, contract B3); ML falls back to its copy if missing | Jassar → backend | Proposed 20 Nov, deciding |
-| Merge `ml/stub-service` into `main` (Pull Request) | Jassar | To do |
-| How many flags can managers review? 🆕 MF4: mentors require it | Team | Proposed 18 Nov: high = top 1% (≈11 careful checks/week for the biggest manager), ≈4% flagged in total with the rules. Used as the default in Step 7; waiting for OK |
+| Merge `ml/stub-service` into `main` (Pull Request) | Jassar → a teammate merges | 🟡 PR open (main merged into the branch first; 29 files, additions only) |
+| How many flags can managers review? 🆕 MF4: mentors require it | Team | Proposed: high = top 1% (≈11 careful checks/week for the biggest manager). After Step 8: ≈4.5% flagged overall, **≈5% in recent months** (above the ≈4% first proposed) → tell the team; used as the default; waiting for OK |
 | 🆕 MF1: Confirm N for the cold-start rule (proposed 5) | ML | ✅ N = 5 (`MIN_HISTORY`), Step 5 |
 | The 13 very busy employees (15.7% of rows): drop from training or add a "vs usual day" count? | ML | ✅ Removed (Step 6, option A); also left out of the seed |
 
@@ -375,6 +397,11 @@ ml/
 - **Saving to Jassar's computer:** always read the file back after a save and compare (one save on 18 Nov reported success but wrote an old version).
 - **Split requests** only become visible once later requests arrive → re-score same-day siblings.
 - **No labels** → evaluate with planted anomalies, not accuracy. 🆕 MF3: include unseen patterns; unlabeled ≠ normal → no precision / false-alarm claims on real data.
+- **Unseen sets and the hand-check are made by independent agents** and their answer files are opened only after results are saved. Guard the save cells (8.17, 8.24): `if not os.path.exists(path): results.to_csv(...)` — a rerun once overwrote the round-1 blind results.
+- **Plant "too big" in spreads, not multiples:** an employee's usual spread is wide (log std ≈1.29), so 6–10× usual can be normal.
+- **Round / digits checks use the amount as typed** (`amount_usd` in history, SAR in the service) and digits only from 100 up ($99.99 → 374.96 SAR is not "made up").
+- **pandas 3:** `stack()` keeps NaN → build pairs with `itertools.combinations`.
+- **Merging `main` into `ml/stub-service`:** `git merge origin/main` then `git checkout origin/main -- api frontend` (the branch deleted the old api skeleton → 18 modify/delete conflicts).
 - **Honest caveats for the presentation:** PCard is card purchases (US government, 2014), not requests; seasons are American (no Ramadan/Eid pattern); ~32% of data excluded (no "Other" category).
 - **Contract changes** go through ML first; bump the version.
 
@@ -388,15 +415,15 @@ All 5 comments are about AI/ML.
 |---|---|---|---|---|---|
 | **MF1** | Build employee spending features from **prior transactions only**; define handling for **new employees** | ❌ Prior-only: **not planned** (stats were going to be whole-history). 🟡 New employees: **partly** (fallback to department under 5 purchases, but no exact rule) | ✅ **Done in Step 5 (18 Nov):** earlier-days-only stats (verified by brute force), written cascade rule with N = 5. Remaining: same code in serving (`features.py`, Step 9) | Jassar | Steps 5, 9; gotchas |
 | **MF2** | Specify the **forecasting model and horizon**; compare with a **last-week baseline** using **rolling validation** and numeric **MAE targets** | ❓ Not in this brief (forecasting teammate's part) | Teammate defines model + horizon, naive last-week baseline, walk-forward validation, MAE target in SAR | Forecasting teammate | Section 8 |
-| **MF3** | Test **unseen** synthetic anomaly patterns; don't treat unlabeled purchases as **confirmed normal** when reporting false alarms / precision | 🟡 **Partly**: planting anomalies + detection rate was planned; unseen patterns and the reporting rule were not | Seen vs unseen anomaly sets; recall + flag rate only; flagged real rows = "unverified" | Jassar (+ a teammate to make the unseen set) | Step 8; gotchas |
-| **MF4** | Set **risk thresholds against review capacity**; compare Isolation Forest with **simple spending-policy rules** | 🟡 Thresholds: **planned** (Step 7 asked for review capacity). ❌ Rules comparison: **not planned** | ✅ **Step 7 (18 Nov):** cut-offs from capacity (high = top 1%, team to confirm); rules built and combined with the model (hybrid). Remaining: model vs rules vs both at the same number of flags (Step 8) | Jassar (+ team for the capacity number) | Steps 7, 8; sections 5, 8 |
+| **MF3** | Test **unseen** synthetic anomaly patterns; don't treat unlabeled purchases as **confirmed normal** when reporting false alarms / precision | 🟡 **Partly**: planting anomalies + detection rate was planned; unseen patterns and the reporting rule were not | ✅ **Done in Step 8 (23 Nov):** seen 86%; 2 blind unseen rounds (0% → 3 new rules → round 2 0.7%, honest limit); recall + flag rate only; blind hand-check; flagged real rows = "unverified" | Jassar (+ a teammate to make the unseen set) | Step 8; gotchas |
+| **MF4** | Set **risk thresholds against review capacity**; compare Isolation Forest with **simple spending-policy rules** | 🟡 Thresholds: **planned** (Step 7 asked for review capacity). ❌ Rules comparison: **not planned** | ✅ **Step 7 (18 Nov):** cut-offs from capacity (high = top 1%, team to confirm); rules combined with the model (hybrid). ✅ **Step 8 (23 Nov):** model 55% vs rules 42% vs hybrid 86% at the same flag budget; policy rules 94% but 16.4% flagged | Jassar (+ team for the capacity number) | Steps 7, 8; sections 5, 8 |
 | **MF5** | *GenAI option:* extract receipt fields with a **multimodal model**; require **human confirmation** and **redaction** of sensitive info before external processing | ❓ **Not assigned** (open question "who builds receipt reading?") | Optional. Employee confirms extracted fields; blur/remove names, card numbers, IDs before sending to an outside API. Idea: receipt amount ≠ claimed amount → new reason code | Team decides | Section 8 |
 
 **Summary:**
 - ✅ Already planned: thresholds from review capacity (MF4), planting anomalies (MF3), department fallback for new employees (MF1).
 - ✅ Done: prior-only stats + exact cold-start rule (MF1, Step 5).
 - ✅ Done: cut-offs from review capacity + rules (MF4, Step 7).
-- ❌ New work for Jassar: unseen anomaly set + honest reporting (MF3), rules baseline comparison (MF4).
+- ✅ Done: unseen anomaly sets + honest reporting (MF3), rules baseline comparison (MF4), Step 8.
 - ➡️ Not Jassar's: forecasting (MF2, teammate), receipt GenAI (MF5, optional, team decides).
 
 ---

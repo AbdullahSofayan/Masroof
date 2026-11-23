@@ -4,6 +4,8 @@
 
 **✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below, and the final ERD (Abdulaziz, 18 Nov evening) has all of them.** Omar's first code is on `backend/expense` (18 Nov) → checked in **"Repo check — 18 Nov (afternoon)"** at the end: 4 changes for the AI part.
 
+**🆕 Latest (23 Nov):** the model is finished and tested → see **"Update — 23 Nov"** near the end (3 new reason codes, how many requests get flagged, 2 questions for the backend).
+
 These changes let the backend store and show the AI model's results correctly.
 Each one has a reason, so you can push back if something doesn't fit.
 
@@ -287,6 +289,33 @@ and the backend should agree on it with Majed**; it also answers the open questi
 4. Still open from before: the C10 AI fixes, the `ml/forecasting` data files in git, the forecast API to agree between Abdullah, Majed and the backend.
 
 ML side: the ML folder (`ml/stub-service`) will be merged into `main` with a Pull Request, so the ML service can be started from the same checkout.
+
+---
+
+## Update — 23 Nov (ML Step 8 finished) · contract v0.4.4
+
+The model is tested and its settings are final (`iforest-0.2`). Nothing in the request or response shape changed.
+
+**What changed for you:**
+1. **3 new reason codes** (13 in total, contract B7): `duplicate_recent_request` (same amount + category as a request a few days earlier), `unusual_amount_digits` (amount looks made up, e.g. 1,111.11), `returning_after_long_break` (first request after 90+ days). The EN/AR texts come from the API in `reason_details`, so **the frontend needs no change**; just don't hard-code a list of codes.
+2. **How many requests get flagged:** ≈1% **high** (careful check) and ≈3.5% **medium** (quick look); ≈5% in total in the most recent months. For the biggest department that's ≈11 high + ≈51 medium per week; for a typical department < 1 high + ≈4 medium. Tell ML if that's too many to review.
+3. **A split request now gives `medium`** (with the split reason), not `high`. The stub still forces `high` for 2+ same-category requests on one day; that's only a testing hook.
+4. **Backend sends nothing new.** The new time rules (receipt reused within 7 days, 90+ days without requests) use history the ML service keeps itself.
+
+**How it was tested (for the presentation):** planted anomalies in the real history; two "unseen" sets made blind by an independent reviewer; the model alone vs simple rules vs both at the same number of flags; and a blind hand-check of 30 requests. The hybrid caught 86% of the planted cases while flagging ≈4.5%; simple policy rules caught 94% but flagged 16% (almost 4× the reviews). All numbers are in `ml/models/evaluation_summary.json`.
+
+**Backend status from the 22 Nov check (still needed for the AI):**
+- ✅ Omar (`backend/expense`, 20 Nov): expenses in MySQL with login, only employees create, edit clears the AI columns, `category_id`. Yousef (`backend/finance-routes`): **C9 dashboard endpoint done**.
+- ❌ Still no ML call: `ai_client`, `anomaly_service`, background task, `rescore_ai` (C2, C3, C6) → the AI columns stay empty.
+- ❌ The expense response shows `anomaly_score` and `risk_level` to **every role** and has no reasons. Contract C7: only the department's manager gets `ai = {risk_level, reasons}`, never the score.
+- ❌ Manager queue sort (C8). Ziyad's `RiskAlertBox` still shows the score %.
+- `backend/expense` needs `main` + `backend/finance-routes` merged in to run.
+
+**Two questions from ML (please answer before the real model, Step 9):**
+- (a) **Seed history:** can ML send `expenses.csv` with the AI columns already filled, instead of running `rescore_ai` on ~200k old rows? Scoring old rows live would compare each one with stats that already include it and later months, which makes old requests look more normal than they were.
+- (b) **Category limits are editable** (Yousef's routes). Can the backend send the current `category_limit` with each score request (optional field)? Otherwise the ML split rule uses its own copy of the 6 limits.
+
+ML side: PR `ml/stub-service` → `main` is open (only adds `ml/`); please review and merge it.
 
 ---
 

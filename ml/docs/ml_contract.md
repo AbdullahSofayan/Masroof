@@ -1,7 +1,7 @@
 # ML Contract — Masroof Anomaly Detection
 
 **Owner:** ML (Jassar) · **For:** Backend (`backend/expense`, `backend/finance`), Frontend (`frontend/employee-manager`)
-**Version:** v0.4.3 — 18 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code · v0.4.2 = reason codes final after Step 6, 13 bulk buyers left out of the seed · v0.4.3 = final ERD check
+**Version:** v0.4.4 — 23 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code · v0.4.4 = Step 8 results: 13 reason codes, real risk levels (model `iforest-0.2`)
 **Stub:** the ML service works now with fake scores (`stub-0.2`). The real model (Step 9) keeps the same endpoints and fields.
 
 Everything the backend and frontend need from ML is in this file.
@@ -33,9 +33,16 @@ What it looks for:
 - For new employees (fewer than 5 earlier requests): an amount much higher than usual for their department in this category
 - A category this employee rarely uses
 - Several requests in the same category for the same day (splitting to stay under a limit)
-- The same amount requested twice for the same day
+- The same amount requested twice for the same day, or again within 7 days (≥ 1,000 SAR)
 - Many requests for the same day
 - Weekend dates (Friday–Saturday) and round amounts
+- Made-up-looking amounts (repeated or sequential digits, e.g. 1,111.11)
+- The first request after a long break (90+ days without requests)
+
+How it decides (Step 7–8): an Isolation Forest model judges "unusual for this person" (amount, category,
+weekend, round), and 6 clear rules catch same-day and time patterns (split, duplicates, busy day, made-up digits,
+long break). **High** = the model's most unusual 1% (careful check). **Medium** = the model's next 0.5%, or any rule
+(quick look). On the demo history that's ≈1% high and ≈3.5% medium (≈5% in the most recent months).
 
 ## A2. How it fits in
 
@@ -223,7 +230,9 @@ Response: `{"results": [ <same response as /anomaly/score>, ... ]}` (same order)
 
 ## B7. Reason codes
 
-**The list is final (Step 6, 18 Nov): all 10 codes stay.** The texts may still be polished in Step 8.
+**The list is final after Step 8 (23 Nov): 13 codes.** The 10 from Step 6, plus 3 added after the first unseen test
+(`duplicate_recent_request`, `unusual_amount_digits`, `returning_after_long_break`). The texts come from the API,
+so the frontend shows whatever `reason_details` contains; no frontend change is needed when a code is added.
 The three "amount" reasons come from one feature; which one is shown depends on what the amount was compared with
 (the employee in this category → the employee overall → the department in this category, for new employees).
 
@@ -239,6 +248,9 @@ The three "amount" reasons come from one feature; which one is shown depends on 
 | `duplicate_request` | Same amount in the same category requested more than once for the same day | نفس المبلغ في نفس الفئة طُلب أكثر من مرة لنفس اليوم |
 | `possible_split_request` | Several requests in the same category for the same day (possible split to stay under a limit) | عدة طلبات في نفس الفئة لنفس اليوم (احتمال تجزئة الطلب للبقاء تحت الحد المسموح) |
 | `many_requests_same_day` | Unusually many requests by this employee for the same day | عدد طلبات غير معتاد من هذا الموظف لنفس اليوم |
+| `duplicate_recent_request` | Same amount and category as a request a few days earlier (possible receipt used twice) | نفس المبلغ والفئة لطلب قبل أيام قليلة (احتمال استخدام الإيصال مرتين) |
+| `unusual_amount_digits` | The amount looks made up (repeated or sequential digits, e.g. 1,111.11 or 1,234.56) | المبلغ يبدو غير حقيقي (أرقام مكررة أو متسلسلة، مثل 1,111.11 أو 1,234.56) |
+| `returning_after_long_break` | First request after a long break (90+ days without any request) | أول طلب بعد انقطاع طويل (أكثر من 90 يومًا دون أي طلب) |
 
 ## B8. Where each response field is saved (EXPENSE table)
 
@@ -920,9 +932,14 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 ## F2. What changes when the real model arrives (Step 9)
 
 - Only the inside of `ml/src/predict.py` changes. **Endpoints, request and response stay the same.**
-- `model_version` changes from `stub-0.2`. Run `python -m app.rescore_ai --all` once.
-- The Medium / High cut-offs are set from **how many flags managers can review** (mentor feedback MF4).
-- Reason texts are finalized (Step 8). The list of 10 reason codes is final (Step 6).
+- `model_version` changes from `stub-0.2` to `iforest-0.2`. Run `python -m app.rescore_ai` for anything not scored yet.
+- **Risk levels** (set from review capacity, MF4): `high` = the model's most unusual 1% (careful check);
+  `medium` = the model's next 0.5% **or** any rule (quick look). On the demo history ≈1% high, ≈3.5% medium.
+- **A split now gives `medium`** (with `possible_split_request`), not `high`: `high` is kept for the model's top 1%.
+  The stub still forces `high` for 2+ same-category requests (F1): that's a testing hook only.
+- 13 reason codes (B7). Up to 3 per request, rules first, then the model's strongest reasons.
+- The new time rules (receipt reused within 7 days, 90+ days without requests) need each employee's recent requests:
+  **the ML service keeps them itself** (it sees every request it scores), so the backend sends nothing new.
 
 ## F3. Mentor feedback that touches this contract
 
@@ -937,7 +954,9 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 
 | Question | Who | Status |
 |---|---|---|
-| How many flagged requests can a manager realistically review per week? (MF4, needed in Step 7) | Team | Open |
+| How many flagged requests can a manager realistically review per week? (MF4) | Team | Proposed: high = top 1% (≈11 careful checks/week for the biggest department, < 1 for a typical one); ≈5% flagged in total with the rules. Used as the default; waiting for OK |
+| Seed history pre-scored by ML (AI columns filled in `expenses.csv`) instead of `rescore_ai` on old rows (E2/E4) | ML → backend | Proposed by ML, deciding |
+| Backend sends the current `category_limit` with each score request (limits are editable in the app) (B3) | ML → backend | Proposed by ML, deciding |
 | How much history goes into the demo database? (E7) | Team / Backend | Open |
 | Block or warn when a request is over its category limit? Add the same-day total rule? (C5) | Backend + team | Open |
 | Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Open |
@@ -953,6 +972,7 @@ file, then tells both teams. The version at the top goes up with every change.
 
 | Version | Date | Changes |
 |---|---|---|
+| v0.4.4 | 23 Nov | Step 8 results: 13 reason codes (+3: `duplicate_recent_request`, `unusual_amount_digits`, `returning_after_long_break`) (B7); real risk levels + split = medium (A1, F2); open ML proposals in F4 |
 | v0.4.3 | 18 Nov | Final ERD check (all agreed changes in): `users.csv` without `is_active` (not in the ERD); `warnings` saved as `[]` instead of null (C5, D1, E2) |
 | v0.4.2 | 18 Nov | Step 6 results: the 10 reason codes are final (B7, F2); `amount_high_for_department` text → "…for this department in this category" (used for new employees); A1 wording; 13 bulk buyers left out of the seed (E3) |
 | v0.4.1 | 18 Nov | C10: checked Omar's first `backend/expense` code — what matches + 4 changes for the AI part (score field name, reasons, score after saving, category name vs id) |

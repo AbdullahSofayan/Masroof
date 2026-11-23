@@ -26,7 +26,7 @@ CATEGORIES = [
     "Equipment & Maintenance",
 ]
 
-# code -> (English, Arabic). The list is final after Step 6 (all 10 kept); texts may be polished in Step 8.
+# code -> (English, Arabic). 10 codes after Step 6 + 3 added in Step 8 (unseen test, round 1).
 REASONS = {
     "amount_high_for_employee": (
         "Amount is much higher than this employee's usual requests",
@@ -58,6 +58,16 @@ REASONS = {
     "many_requests_same_day": (
         "Unusually many requests by this employee for the same day",
         "عدد طلبات غير معتاد من هذا الموظف لنفس اليوم"),
+    # Added in Step 8 (round 1 of the unseen test): patterns that only show over time or in the digits
+    "duplicate_recent_request": (
+        "Same amount and category as a request a few days earlier (possible receipt used twice)",
+        "نفس المبلغ والفئة لطلب قبل أيام قليلة (احتمال استخدام الإيصال مرتين)"),
+    "unusual_amount_digits": (
+        "The amount looks made up (repeated or sequential digits, e.g. 1,111.11 or 1,234.56)",
+        "المبلغ يبدو غير حقيقي (أرقام مكررة أو متسلسلة، مثل 1,111.11 أو 1,234.56)"),
+    "returning_after_long_break": (
+        "First request after a long break (90+ days without any request)",
+        "أول طلب بعد انقطاع طويل (أكثر من 90 يومًا دون أي طلب)"),
 }
 
 # Placeholder cut-offs. Final values are set in Step 7.
