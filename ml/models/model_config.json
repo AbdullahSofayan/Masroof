@@ -49,5 +49,25 @@
     "min_history": 5,
     "min_std": 0.1,
     "z_cap": 10
+  },
+  "history": {
+    "file": "history.joblib",
+    "date_shift_weeks": 21,
+    "from": "2025-10-08",
+    "to": "2026-11-22",
+    "requests": 209012
+  },
+  "reasons": {
+    "normal_values": {
+      "log_amount": 5.8661,
+      "amount_vs_employee_category": 0.0,
+      "category_share_for_employee": 0.5886406224056548,
+      "is_weekend": 0,
+      "is_round_amount": 0
+    },
+    "min_drop": 0.02,
+    "max_reasons": 3,
+    "unusual_share": 0.2,
+    "min_spreads": 1
   }
 }

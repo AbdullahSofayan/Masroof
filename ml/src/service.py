@@ -12,12 +12,18 @@ Docs (Swagger): http://localhost:8001/docs
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from src.predict import CATEGORIES, MODEL_VERSION, REASONS, reason_detail, score_request
+from src.predict import (CATEGORIES, MODEL_VERSION, REASONS, history_info, reason_detail,
+                         score_request, use_added_file)
+
+# Requests scored by the service are kept here (git-ignored, data/ is never committed), so a restart
+# doesn't forget them. Delete the file to go back to the training history only.
+use_added_file(Path(__file__).resolve().parent.parent / "data" / "service" / "added_requests.csv")
 
 CategoryName = Literal[
     "Food", "Travel", "Transportation", "Office Supplies",
@@ -42,6 +48,10 @@ class ScoreRequest(BaseModel):
     same_day_requests: list[SameDayRequest] = Field(
         default_factory=list,
         description="The requester's OTHER requests with the same expense_date (any status). Empty if none.",
+    )
+    category_limit: Decimal | None = Field(
+        default=None, gt=0,
+        description="Current max_amount for this category (expense_limits). Optional: missing → ML's copy (contract v0.4.5).",
     )
 
 
@@ -78,7 +88,8 @@ app = FastAPI(
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_version": MODEL_VERSION}
+    """Status, model version, and how many requests the service compares new ones with."""
+    return {"status": "ok", "model_version": MODEL_VERSION, "history": history_info()}
 
 
 @app.get("/anomaly/categories", response_model=list[str])
@@ -105,3 +116,8 @@ def score(req: ScoreRequest):
 def score_batch(req: BatchRequest):
     """Score up to 500 requests in one call (re-scoring, seed history)."""
     return {"results": [score(item) for item in req.items]}
+
+
+# ---------- Forecasting (Abdullah, ml/forecasting) ----------
+# Agreed 23 Nov: the forecasting routes (e.g. POST /forecast/predict, using src/forecast.py) go
+# below this line, so the two parts of the service don't edit the same lines.

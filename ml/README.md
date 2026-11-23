@@ -35,3 +35,8 @@ Docs: http://localhost:8001/docs · Backend `.env`: `AI_SERVICE_URL=http://local
 
 - Do not commit `data/` (it is in .gitignore).
 - Category names must match the backend's `categories.name` exactly.
+- The service needs `models/isolation_forest.joblib`, `models/model_config.json` and `models/history.joblib`
+  (the history it compares new requests with; dates moved +21 weeks, see the config's `history` block).
+- Requests the service scores are added to that history and written to `data/service/added_requests.csv`,
+  so a restart doesn't forget them. Delete that file to go back to the training history only.
+- `scikit-learn` must stay at the version in `requirements.txt` (the saved model may not load in another).

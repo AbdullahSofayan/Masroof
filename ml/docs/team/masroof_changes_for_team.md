@@ -317,7 +317,7 @@ The model is tested and its settings are final (`iforest-0.2`). The response sha
 - `backend/expense` needs `main` + `backend/finance-routes` merged in to run.
 
 **One question from ML (please answer before the real model, Step 9):**
-- (a) **Seed history:** can ML send `expenses.csv` with the AI columns already filled, instead of running `rescore_ai` on ~200k old rows? Scoring old rows live would compare each one with stats that already include it and later months, which makes old requests look more normal than they were.
+- (a) **Seed history:** ML can send `expenses.csv` with the AI columns already filled (it takes ML a few minutes). Running `rescore_ai` on the ~200k old rows through the real service also gives correct results (the service only compares each request with earlier days), but it takes about 1.5–2 hours. Which do you prefer? *(Corrected 23 Nov: an earlier version said live re-scoring would be wrong; with the real service it isn't, it's only slow.)*
 
 ML side: PR `ml/stub-service` → `main` is open (only adds `ml/`); please review and merge it.
 
