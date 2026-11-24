@@ -1,4 +1,5 @@
 """Shapes for the finance API: what the finance admin sends, and what we send back."""
+from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -103,3 +104,25 @@ class AnomalySummary(BaseModel):
     counts: RiskCounts
     by_department: list[DepartmentRisk] = Field(description="Highest flagged_percent first.")
     top_reasons: list[ReasonCount] = Field(description="Top 5 among flagged requests.")
+
+
+# ---------- Spending forecast (same shape as the finance frontend) ----------
+class WeekActual(BaseModel):
+    week_start: date = Field(description="Sunday that starts the week.")
+    actual: Decimal | None = Field(
+        description="Approved spending that week. null means the department had no history yet."
+    )
+
+
+class WeekPredicted(BaseModel):
+    week_start: date = Field(description="Sunday that starts the week.")
+    predicted: Decimal = Field(description="Predicted spending that week in SAR.")
+
+
+class ForecastRead(BaseModel):
+    department_id: int
+    model: str = Field(description="Name of the forecasting model.")
+    generated_for_week: date = Field(description="Sunday of the first predicted week (the current week).")
+    history: list[WeekActual] = Field(description="Last 8 completed weeks, oldest first.")
+    weeks: list[WeekPredicted] = Field(description="Next 4 weeks, starting with the current week.")
+    baseline_last_week: Decimal = Field(description="Last completed week's total, the simple baseline.")

@@ -1,8 +1,8 @@
-"""Finance API: departments, category spending limits, monthly budgets, and the AI summary.
+"""Finance API: departments, category spending limits, monthly budgets, the AI summary, and the forecast.
 
 Only finance admins can create or change departments, budgets, and limits.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -30,11 +30,17 @@ from app.schemas.finance import (
     ExpenseLimitCreate,
     ExpenseLimitRead,
     ExpenseLimitUpdate,
+    ForecastRead,
 )
-from app.services.finance_service import budget_usage
+from app.services.finance_service import budget_usage, completed_weeks, week_start, weekly_totals
+from app.services.forecast_model import MODEL_NAME, ForecastUnavailable, get_predictor
 
 router = APIRouter(tags=["Finance"])
 _finance = require_roles(UserRole.FINANCE_ADMIN)
+
+HISTORY_WEEKS = 8
+MODEL_INPUT_WEEKS = 4
+FORECAST_WEEKS = 4
 
 
 def approved_spent(db: Session, department_id: int, year: int, month: int) -> Decimal:
@@ -277,3 +283,70 @@ def anomaly_summary(
     by_department.sort(key=lambda row: row["flagged_percent"], reverse=True)
     top_reasons = sorted(reasons.values(), key=lambda item: item["count"], reverse=True)[:5]
     return {"counts": counts, "by_department": by_department, "top_reasons": top_reasons}
+
+
+# ---------- Spending forecast ----------
+@router.get("/forecast", response_model=ForecastRead)
+def department_forecast(
+    department_id: int = Query(..., description="Department to forecast."),
+    db: Session = Depends(get_db),
+    _: User = Depends(_finance),
+):
+    """Predict a department's spending for the next 4 weeks from its approved weekly spending."""
+    if db.get(Department, department_id) is None:
+        raise HTTPException(status_code=404, detail="Department not found")
+    try:
+        predict = get_predictor()
+    except ForecastUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    today = date.today()
+    weeks = completed_weeks(today, HISTORY_WEEKS)
+    this_week = week_start(today)
+    model_weeks = weeks[-MODEL_INPUT_WEEKS:]
+
+    first_day = db.scalar(
+        select(func.min(Expense.expense_date)).where(
+            Expense.department_id == department_id,
+            Expense.status == ExpenseStatus.APPROVED,
+        )
+    )
+    if first_day is None or week_start(first_day) > model_weeks[0]:
+        raise HTTPException(
+            status_code=409,
+            detail="Not enough history: the forecast needs 4 completed weeks of approved spending",
+        )
+    history_start = week_start(first_day)
+
+    rows = db.execute(
+        select(Expense.expense_date, Expense.amount).where(
+            Expense.department_id == department_id,
+            Expense.status == ExpenseStatus.APPROVED,
+            Expense.expense_date >= weeks[0],
+            Expense.expense_date < this_week,
+        )
+    ).all()
+    totals = weekly_totals([(row.expense_date, row.amount) for row in rows], weeks)
+
+    try:
+        predictions = predict(department_id, [float(total) for total in totals[-MODEL_INPUT_WEEKS:]])
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=503, detail="The forecasting model file is missing on the server.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    upcoming = [this_week + timedelta(weeks=n) for n in range(FORECAST_WEEKS)]
+    return {
+        "department_id": department_id,
+        "model": MODEL_NAME,
+        "generated_for_week": this_week,
+        "history": [
+            {"week_start": start, "actual": total if start >= history_start else None}
+            for start, total in zip(weeks, totals)
+        ],
+        "weeks": [
+            {"week_start": start, "predicted": Decimal(str(value))}
+            for start, value in zip(upcoming, predictions)
+        ],
+        "baseline_last_week": totals[-1],
+    }
