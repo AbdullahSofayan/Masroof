@@ -6,8 +6,19 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # ---------- Departments ----------
 class DepartmentCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str = Field(min_length=1, max_length=120, description="Department name, must be unique.")
     manager_id: int | None = Field(default=None, description="User id of the department manager (optional).")
+
+
+class DepartmentUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str | None = Field(default=None, min_length=1, max_length=120, description="New name (optional).")
+    manager_id: int | None = Field(
+        default=None, description="New manager user id. Send null to remove the manager."
+    )
 
 
 class DepartmentRead(BaseModel):

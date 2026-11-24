@@ -1,6 +1,6 @@
 """Finance API: departments, category spending limits, monthly budgets, and the AI summary.
 
-Only finance admins can change budgets and limits.
+Only finance admins can create or change departments, budgets, and limits.
 """
 from datetime import date
 from decimal import Decimal
@@ -24,7 +24,9 @@ from app.schemas.finance import (
     BudgetRead,
     BudgetUpdate,
     BudgetUsageRead,
+    DepartmentCreate,
     DepartmentRead,
+    DepartmentUpdate,
     ExpenseLimitCreate,
     ExpenseLimitRead,
     ExpenseLimitUpdate,
@@ -48,10 +50,65 @@ def approved_spent(db: Session, department_id: int, year: int, month: int) -> De
     return Decimal(total)
 
 
+def check_department_name(db: Session, name: str, department_id: int | None = None) -> None:
+    """Stop with 409 if another department already uses this name."""
+    query = select(Department).where(Department.name == name)
+    if department_id is not None:
+        query = query.where(Department.id != department_id)
+    if db.scalar(query):
+        raise HTTPException(status_code=409, detail="A department with this name already exists")
+
+
+def check_manager(db: Session, manager_id: int, department_id: int | None = None) -> None:
+    """Stop if the user is missing, is not a manager, or already manages another department."""
+    user = db.get(User, manager_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Manager user not found")
+    if user.role != UserRole.MANAGER:
+        raise HTTPException(status_code=400, detail="This user does not have the manager role")
+    query = select(Department).where(Department.manager_id == manager_id)
+    if department_id is not None:
+        query = query.where(Department.id != department_id)
+    if db.scalar(query):
+        raise HTTPException(status_code=409, detail="This manager already manages another department")
+
+
 # ---------- Departments ----------
 @router.get("/departments", response_model=list[DepartmentRead])
 def list_departments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return list(db.scalars(select(Department).order_by(Department.name)).all())
+
+
+@router.post("/departments", response_model=DepartmentRead, status_code=status.HTTP_201_CREATED)
+def create_department(payload: DepartmentCreate, db: Session = Depends(get_db), _: User = Depends(_finance)):
+    check_department_name(db, payload.name)
+    if payload.manager_id is not None:
+        check_manager(db, payload.manager_id)
+    department = Department(name=payload.name, manager_id=payload.manager_id)
+    db.add(department)
+    db.commit()
+    db.refresh(department)
+    return department
+
+
+@router.patch("/departments/{department_id}", response_model=DepartmentRead)
+def update_department(
+    department_id: int, payload: DepartmentUpdate, db: Session = Depends(get_db), _: User = Depends(_finance)
+):
+    department = db.get(Department, department_id)
+    if department is None:
+        raise HTTPException(status_code=404, detail="Department not found")
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("name") is not None:
+        check_department_name(db, changes["name"], department_id)
+        department.name = changes["name"]
+    if "manager_id" in changes:
+        if changes["manager_id"] is not None:
+            check_manager(db, changes["manager_id"], department_id)
+        department.manager_id = changes["manager_id"]
+    db.commit()
+    db.refresh(department)
+    return department
 
 
 # ---------- Monthly budgets ----------
