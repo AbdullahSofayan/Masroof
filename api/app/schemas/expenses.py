@@ -75,7 +75,7 @@ class ExpenseResponse(BaseModel):
     category_id: int = Field(gt=0, description="ID of the expense category.")
     description: str = Field(description="Description of the expense")
     expense_date: date = Field(description="Date when the expense occurred")
-    status: str = Field(description="Current expense status: Pending, Approved, or Rejected")
+    status: str = Field(description="Current expense status: pending, approved, or rejected")
     manager_note: str | None = None
     requester_id: int
     department_id: int
@@ -89,6 +89,7 @@ class ExpenseResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     risk_level: str | None = None
     anomaly_score: float | None = None
+    ai_analysis: dict | None = None
 
 
 
