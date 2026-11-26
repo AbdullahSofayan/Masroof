@@ -1,5 +1,11 @@
-# Everything for the notebooks (training, evaluation)
+# Notebook dependencies
 -r requirements.txt
+
 matplotlib
 seaborn
 jupyter
+xgboost==3.2.0
+catboost==1.2.10
+nbformat==5.10.4
+nbclient==0.10.0
+ipykernel==6.29.5
