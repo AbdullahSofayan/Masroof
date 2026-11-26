@@ -147,7 +147,10 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
               </span>
             ))}
           </div>
-          <p className="sr-only">Spend includes approved requests only; pending and rejected requests are excluded.</p>
+          <p className="sr-only">
+            Spend includes approved requests only; pending and rejected requests
+            are excluded.
+          </p>
         </div>
         <dl className="hero-metrics mt-auto grid gap-x-4 gap-y-4 border-t border-white/20">
           {metrics.map((metric) => (
