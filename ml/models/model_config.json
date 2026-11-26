@@ -1,0 +1,73 @@
+{
+  "model_version": "iforest-0.2",
+  "trained_on": {
+    "requests": 209012,
+    "from": "2025-05-14",
+    "to": "2026-06-28",
+    "sklearn_version": "1.9.1"
+  },
+  "model_features": [
+    "log_amount",
+    "amount_vs_employee_category",
+    "category_share_for_employee",
+    "is_weekend",
+    "is_round_amount"
+  ],
+  "rule_features": [
+    "same_category_day_count",
+    "duplicate_count",
+    "other_category_day_count"
+  ],
+  "model_input": {
+    "log_amount_floor": 5.8661,
+    "amount_vs_employee_category_floor": 0
+  },
+  "cut_offs": {
+    "high_from": 0.6638820970206413,
+    "medium_from": 0.6512925928783421,
+    "high_share": 0.01,
+    "model_flag_share": 0.015
+  },
+  "rules": {
+    "split_min_part": 0.25,
+    "split_max_parts": 5,
+    "duplicate_min_amount": 1000,
+    "duplicate_max_copies": 3,
+    "many_other_from": 8,
+    "recent_duplicate_days": 7,
+    "long_break_days": 90
+  },
+  "category_limits": {
+    "Food": 2000,
+    "Travel": 10000,
+    "Transportation": 5000,
+    "Office Supplies": 3000,
+    "IT & Telecom": 7500,
+    "Equipment & Maintenance": 7500
+  },
+  "feature_settings": {
+    "min_history": 5,
+    "min_std": 0.1,
+    "z_cap": 10
+  },
+  "history": {
+    "file": "history.joblib",
+    "date_shift_weeks": 21,
+    "from": "2025-10-08",
+    "to": "2026-11-22",
+    "requests": 209012
+  },
+  "reasons": {
+    "normal_values": {
+      "log_amount": 5.8661,
+      "amount_vs_employee_category": 0.0,
+      "category_share_for_employee": 0.5886406224056548,
+      "is_weekend": 0,
+      "is_round_amount": 0
+    },
+    "min_drop": 0.02,
+    "max_reasons": 3,
+    "unusual_share": 0.2,
+    "min_spreads": 1
+  }
+}

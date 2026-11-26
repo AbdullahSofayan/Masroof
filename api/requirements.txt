@@ -1,0 +1,36 @@
+
+# API and application server
+fastapi[standard]
+uvicorn[standard]
+
+# Database
+sqlalchemy
+pymysql
+alembic
+
+# Configuration
+python-dotenv
+
+# Authentication and password hashing
+python-jose[cryptography]
+pwdlib[argon2]
+passlib[bcrypt]
+
+# Data validation
+pydantic[email]
+
+# File uploads and receipt handling
+python-multipart
+pillow
+pypdf
+
+# Data processing and anomaly detection
+numpy
+pandas
+scikit-learn
+joblib
+
+# Testing
+pytest
+httpx
+

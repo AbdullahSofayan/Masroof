@@ -1,9 +1,9 @@
-# Tested with Python 3.10; versions used for the five-model notebook experiment.
-numpy==1.26.4
-scipy==1.15.2
-pandas==2.2.2
-scikit-learn==1.6.1
-matplotlib==3.9.1.post1
+# Notebook dependencies
+-r requirements.txt
+
+matplotlib
+seaborn
+jupyter
 xgboost==3.2.0
 catboost==1.2.10
 nbformat==5.10.4

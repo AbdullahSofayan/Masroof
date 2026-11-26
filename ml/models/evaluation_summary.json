@@ -1,0 +1,213 @@
+{
+  "model_version": "iforest-0.2",
+  "design": "hybrid: Isolation Forest (5 one-sided features) + 6 rules; high = model top 1%, medium = model next 0.5% or any rule",
+  "real_data": {
+    "requests": 209012,
+    "risk_levels_pct": {
+      "low": 95.5,
+      "medium": 3.5,
+      "high": 1.0
+    },
+    "flagged_pct_jan_jun_2026": 5.1,
+    "per_week_biggest_department": {
+      "high": 11.3,
+      "medium": 51.4
+    },
+    "per_week_median_department": {
+      "high": 0.7,
+      "medium": 3.8
+    },
+    "note": "unlabeled data: flags are unverified, no precision or false-alarm rate claimed (MF3)"
+  },
+  "seen_planted": {
+    "cases": 750,
+    "flagged_pct_on_real": {
+      "model_only": 4.47,
+      "rules_only": 3.08,
+      "policy_rules": 16.43,
+      "hybrid": 4.47
+    },
+    "caught_pct_by_pattern": {
+      "duplicate": {
+        "model_only": 2.0,
+        "rules_only": 100.0,
+        "policy_rules": 100.0,
+        "hybrid": 100.0
+      },
+      "many_requests": {
+        "model_only": 2.0,
+        "rules_only": 100.0,
+        "policy_rules": 100.0,
+        "hybrid": 100.0
+      },
+      "new_category_big": {
+        "model_only": 100.0,
+        "rules_only": 3.0,
+        "policy_rules": 79.0,
+        "hybrid": 70.0
+      },
+      "split": {
+        "model_only": 9.0,
+        "rules_only": 100.0,
+        "policy_rules": 100.0,
+        "hybrid": 100.0
+      },
+      "too_big": {
+        "model_only": 78.0,
+        "rules_only": 5.0,
+        "policy_rules": 90.0,
+        "hybrid": 69.0
+      },
+      "weekend_round": {
+        "model_only": 100.0,
+        "rules_only": 2.0,
+        "policy_rules": 100.0,
+        "hybrid": 100.0
+      }
+    },
+    "caught_pct_all": {
+      "model_only": 55.0,
+      "rules_only": 42.0,
+      "policy_rules": 94.0,
+      "hybrid": 86.0
+    },
+    "too_big_by_spreads": {
+      "2.0": {
+        "model_only": 10.0,
+        "rules_only": 2.0,
+        "policy_rules": 60.0,
+        "hybrid": 4.0
+      },
+      "3.0": {
+        "model_only": 82.0,
+        "rules_only": 0.0,
+        "policy_rules": 94.0,
+        "hybrid": 46.0
+      },
+      "4.0": {
+        "model_only": 100.0,
+        "rules_only": 10.0,
+        "policy_rules": 96.0,
+        "hybrid": 94.0
+      },
+      "5.0": {
+        "model_only": 100.0,
+        "rules_only": 8.0,
+        "policy_rules": 98.0,
+        "hybrid": 100.0
+      },
+      "6.0": {
+        "model_only": 100.0,
+        "rules_only": 4.0,
+        "policy_rules": 100.0,
+        "hybrid": 100.0
+      }
+    }
+  },
+  "unseen_round1": {
+    "made_by": "independent AI agent with no access to the model design",
+    "result_before_fix": "hybrid 0/126 suspicious cases, model alone 2%, policy rules 12%; 0/25 normal controls flagged",
+    "patterns": [
+      "creeping_escalation",
+      "cross_day_duplicate",
+      "dormant_reactivation",
+      "fixed_monthly_repeat",
+      "micro_probe_claims",
+      "patterned_digits"
+    ],
+    "fix": "3 rules added: duplicate_recent_request, unusual_amount_digits, returning_after_long_break (now seen)"
+  },
+  "unseen_round2": {
+    "made_by": "a second independent AI agent; all 12 earlier patterns excluded",
+    "flagged_pct_on_real": {
+      "model_only": 4.48,
+      "rules_only": 3.09,
+      "policy_rules": 16.43,
+      "hybrid": 4.47
+    },
+    "suspicious_cases": 142,
+    "caught_pct_suspicious": {
+      "model_only": 0.0,
+      "rules_only": 0.7,
+      "policy_rules": 2.1,
+      "hybrid": 0.7
+    },
+    "normal_controls_flagged_pct": {
+      "model_only": 0.0,
+      "rules_only": 0.0,
+      "policy_rules": 0.0,
+      "hybrid": 0.0
+    },
+    "caught_pct_by_pattern": {
+      "colleague_receipt_reuse": {
+        "model_only": 0.0,
+        "rules_only": 0.0,
+        "policy_rules": 0.0,
+        "hybrid": 0.0
+      },
+      "daily_personal_meals": {
+        "model_only": 0.0,
+        "rules_only": 0.0,
+        "policy_rules": 0.0,
+        "hybrid": 0.0
+      },
+      "eid_holiday_purchase": {
+        "model_only": 0.0,
+        "rules_only": 0.0,
+        "policy_rules": 0.0,
+        "hybrid": 0.0
+      },
+      "quarter_end_budget_burn": {
+        "model_only": 0.0,
+        "rules_only": 0.0,
+        "policy_rules": 10.0,
+        "hybrid": 0.0
+      },
+      "retail_price_gadget": {
+        "model_only": 0.0,
+        "rules_only": 5.0,
+        "policy_rules": 5.0,
+        "hybrid": 5.0
+      },
+      "shared_bill_double_claim": {
+        "model_only": 0.0,
+        "rules_only": 0.0,
+        "policy_rules": 0.0,
+        "hybrid": 0.0
+      },
+      "weekend_stretched_trip": {
+        "model_only": 0.0,
+        "rules_only": 0.0,
+        "policy_rules": 0.0,
+        "hybrid": 0.0
+      }
+    }
+  },
+  "blind_hand_check": {
+    "reviewer": "independent AI agent, did not know which requests were flagged",
+    "verdicts_by_ai_level": {
+      "high": {
+        "can't tell": 2,
+        "looks normal": 7,
+        "suspicious": 1
+      },
+      "low": {
+        "can't tell": 0,
+        "looks normal": 10,
+        "suspicious": 0
+      },
+      "medium": {
+        "can't tell": 1,
+        "looks normal": 8,
+        "suspicious": 1
+      }
+    }
+  },
+  "limits": [
+    "judges one request at a time (+ that day and that person's history)",
+    "can't see trends or recurring patterns over weeks/months",
+    "can't compare employees with each other (shared / reused receipts)",
+    "no holiday calendar; no receipt checking (MF5)",
+    "trained on US purchase-card data: several purchases a day are normal there, rules fire more than they would in Masroof"
+  ]
+}
