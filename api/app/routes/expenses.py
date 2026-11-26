@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from logging import getLogger
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -10,9 +10,10 @@ from app.db.session import get_db
 from app.models import Budget, Category, Expense, ExpenseLimit, ExpenseStatus, User, UserRole
 from app.routes.finance import approved_spent
 from app.schemas.expenses import (ExpenseApprove, ExpenseCreate, ExpenseListResponse,
-                                 ExpenseReference, ExpenseReject, ExpenseResponse, ExpenseUpdate)
+ExpenseReference, ExpenseReject, ExpenseResponse, ExpenseUpdate)
 from app.services.decision_engine import evaluate_expense
 from app.services.receipt_service import read_receipt_upload, receipt_file, receipt_types, save_receipt
+from app.services.anomaly_service import score_saved_expense
 
 router = APIRouter(tags=["Expenses"])
 expense_router = APIRouter(prefix="/expenses")
@@ -23,13 +24,22 @@ logger = getLogger(__name__)
 
 ##turn the MySQL expense row into the response sent to the frontend
 def expense_response(expense: Expense) -> ExpenseResponse:
+    ##prepare the saved risk level and reasons for the manager's review page
+    ai_analysis = None
+    if expense.risk_level is not None:
+        ai_analysis = {
+            "risk_level": expense.risk_level.value,
+            "warnings": [
+                reason["text_en"] for reason in expense.risk_justification or []
+            ],
+        }
     return ExpenseResponse(
         id=expense.id,
         amount=expense.amount,
         category_id=expense.category_id,
         description=expense.description,
         expense_date=expense.expense_date,
-        status=expense.status.value,
+        status=expense.status.value.lower(),
         manager_note=expense.manager_note,
         requester_id=expense.requester_id,
         department_id=expense.department_id,
@@ -43,6 +53,7 @@ def expense_response(expense: Expense) -> ExpenseResponse:
         warnings=expense.warnings or [],
         risk_level=expense.risk_level.value if expense.risk_level else None,
         anomaly_score=expense.anomaly_score,
+        ai_analysis=ai_analysis,
     )
 
 
@@ -92,6 +103,7 @@ def get_categories(
 @expense_router.post("", status_code=201, response_model=ExpenseResponse)
 def create_expense(
     expense: ExpenseCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -112,6 +124,7 @@ def create_expense(
     db.add(new_expense)
     db.commit()
     db.refresh(new_expense)
+    background_tasks.add_task(score_saved_expense, new_expense.id)
     return expense_response(new_expense)
 
 
@@ -142,13 +155,21 @@ def get_expenses(
     size: int = Query(default=100, ge=1, le=100),
     status: str | None = Query(default=None),
 ):
-    query = visible_expenses_query(current_user)
+    # finance uses the company-wide list to calculate spending across departments
+    query = (
+        select(Expense)
+        if current_user.role == UserRole.FINANCE_ADMIN
+        else visible_expenses_query(current_user)
+    )
     if status is not None:
         try:
             expense_status = ExpenseStatus(status.strip().capitalize())
         except ValueError as error:
             raise HTTPException(status_code=422, detail="Invalid expense status.") from error
         query = query.where(Expense.status == expense_status)
+
+
+
 
     ##count all matching expenses before taking one page
     total = db.scalar(query.with_only_columns(func.count(), maintain_column_froms=True))
@@ -197,6 +218,7 @@ def get_expense(
 def update_expense(
     expense_id: int,
     data: ExpenseUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -237,6 +259,11 @@ def update_expense(
 
     response = expense_response(expense)
     db.commit()
+
+    ## score the expense again after saving the changes
+    if changes:
+        background_tasks.add_task(score_saved_expense, expense_id)
+
     return response
 
 
