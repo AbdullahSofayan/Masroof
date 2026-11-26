@@ -30,7 +30,7 @@ def prepare_expense(
         "amount": expense_data["amount"],
         "description": expense_data["description"],
         "expense_date": expense_data["expense_date"],
-        "status": "Pending",
+        "status": "pending",
         "warnings": evaluation["warnings"],
         "risk_level": evaluation["risk_level"],
         "anomaly_score": evaluation["anomaly_score"],
