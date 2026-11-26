@@ -69,6 +69,19 @@ class ExpenseRequester(BaseModel):
     full_name: str
 
 
+##reason returned by the anomaly model
+class AnomalyReason(BaseModel):
+    code: str
+    text_en: str
+    text_ar: str
+
+
+##risk information for the manager's review page
+class ExpenseAnomalyAnalysis(BaseModel):
+    risk_level: str
+    reasons: list[AnomalyReason]
+
+
 class ExpenseResponse(BaseModel):
     id: int = Field(description="Unique identifier of the expense")
     amount: Decimal = Field(description="Expense amount in SAR.")
@@ -87,9 +100,7 @@ class ExpenseResponse(BaseModel):
     reviewer_name: str | None = None
     attachment_url: str | None = None
     warnings: list[str] = Field(default_factory=list)
-    risk_level: str | None = None
-    anomaly_score: float | None = None
-    ai_analysis: dict | None = None
+    ai_analysis: ExpenseAnomalyAnalysis | None = None
 
 
 

@@ -2,14 +2,14 @@ from datetime import datetime, timezone
 from logging import getLogger
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
-from app.models import Budget, Category, Expense, ExpenseLimit, ExpenseStatus, User, UserRole
+from app.models import Budget, Category, Expense, ExpenseLimit, ExpenseStatus, RiskLevel, User, UserRole
 from app.routes.finance import approved_spent
-from app.schemas.expenses import (ExpenseApprove, ExpenseCreate, ExpenseListResponse,
+from app.schemas.expenses import (ExpenseAnomalyAnalysis, ExpenseApprove, ExpenseCreate, ExpenseListResponse,
 ExpenseReference, ExpenseReject, ExpenseResponse, ExpenseUpdate)
 from app.services.decision_engine import evaluate_expense
 from app.services.receipt_service import read_receipt_upload, receipt_file, receipt_types, save_receipt
@@ -23,16 +23,18 @@ logger = getLogger(__name__)
 ##=-=-=-=-=-=- Expense helpers =-=-=-=-=-=-
 
 ##turn the MySQL expense row into the response sent to the frontend
-def expense_response(expense: Expense) -> ExpenseResponse:
+def expense_response(expense: Expense, current_user: User) -> ExpenseResponse:
     ##prepare the saved risk level and reasons for the manager's review page
     ai_analysis = None
-    if expense.risk_level is not None:
-        ai_analysis = {
-            "risk_level": expense.risk_level.value,
-            "warnings": [
-                reason["text_en"] for reason in expense.risk_justification or []
-            ],
-        }
+    if (
+        current_user.role == UserRole.MANAGER
+        and current_user.department_id == expense.department_id
+        and expense.risk_level is not None
+    ):
+        ai_analysis = ExpenseAnomalyAnalysis(
+            risk_level=expense.risk_level.value,
+            reasons=expense.risk_justification or [],
+        )
     return ExpenseResponse(
         id=expense.id,
         amount=expense.amount,
@@ -51,8 +53,6 @@ def expense_response(expense: Expense) -> ExpenseResponse:
         reviewer_name=expense.reviewer.full_name if expense.reviewer else None,
         attachment_url=f"/expenses/{expense.id}/attachment" if expense.receipt_path else None,
         warnings=expense.warnings or [],
-        risk_level=expense.risk_level.value if expense.risk_level else None,
-        anomaly_score=expense.anomaly_score,
         ai_analysis=ai_analysis,
     )
 
@@ -125,7 +125,7 @@ def create_expense(
     db.commit()
     db.refresh(new_expense)
     background_tasks.add_task(score_saved_expense, new_expense.id)
-    return expense_response(new_expense)
+    return expense_response(new_expense, current_user)
 
 
 
@@ -168,8 +168,23 @@ def get_expenses(
             raise HTTPException(status_code=422, detail="Invalid expense status.") from error
         query = query.where(Expense.status == expense_status)
 
-
-
+    ## put higher-risk requests first in the manager's pending queue
+    ordering = [Expense.id.desc()]
+    if current_user.role == UserRole.MANAGER:
+        pending = Expense.status == ExpenseStatus.PENDING
+        risk_order = case(
+            (Expense.risk_level == RiskLevel.HIGH, 0),
+            (Expense.risk_level == RiskLevel.MEDIUM, 1),
+            (Expense.risk_level == RiskLevel.LOW, 2),
+            else_=3,
+        )
+        ordering = [
+            case((pending, 0), else_=1),
+            case((pending, risk_order)),
+            case((pending, Expense.created_at)).asc(),
+            case((pending, Expense.id)).asc(),
+            Expense.id.desc(),
+        ]
 
     ##count all matching expenses before taking one page
     total = db.scalar(query.with_only_columns(func.count(), maintain_column_froms=True))
@@ -179,10 +194,10 @@ def get_expenses(
             selectinload(Expense.department),
             selectinload(Expense.category),
             selectinload(Expense.reviewer),
-        ).order_by(Expense.id.desc()).offset((page - 1) * size).limit(size)
+        ).order_by(*ordering).offset((page - 1) * size).limit(size)
     ).all()
     return ExpenseListResponse(
-        items=[expense_response(row) for row in rows],
+        items=[expense_response(row, current_user) for row in rows],
         total=total,
         page=page,
         size=size,
@@ -204,7 +219,7 @@ def get_expense(
     row = db.scalar(query)
     if row is None:
         raise HTTPException(status_code=404, detail="Expense not found.")
-    return expense_response(row)
+    return expense_response(row, current_user)
 
 
 
@@ -243,6 +258,7 @@ def update_expense(
     }
     if "category_id" in changes and db.get(Category, changes["category_id"]) is None:
         raise HTTPException(status_code=404, detail="Expense category not found.")
+    previous_date = expense.expense_date
     for field, value in changes.items():
         setattr(expense, field, value)
 
@@ -257,12 +273,12 @@ def update_expense(
         expense.anomaly_score = None
         expense.risk_justification = None
 
-    response = expense_response(expense)
+    response = expense_response(expense, current_user)
     db.commit()
 
     ## score the expense again after saving the changes
     if changes:
-        background_tasks.add_task(score_saved_expense, expense_id)
+        background_tasks.add_task(score_saved_expense, expense_id, previous_date)
 
     return response
 
@@ -299,7 +315,7 @@ def review_expense(
     expense.reviewed_by = current_user.id
     expense.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     expense.manager_note = note or None
-    response = expense_response(expense)
+    response = expense_response(expense, current_user)
     db.commit()
     return response
 
@@ -358,7 +374,7 @@ def upload_receipt(
         raise HTTPException(status_code=409, detail="Only Pending expenses can receive a receipt.")
 
     content, extension = read_receipt_upload(file)
-    response = expense_response(expense)
+    response = expense_response(expense, current_user)
     old_filename = expense.receipt_path
     expense.receipt_path = save_receipt(content, extension)
     db.commit()
