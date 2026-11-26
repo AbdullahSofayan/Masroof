@@ -1,0 +1,5 @@
+# Everything for the notebooks (training, evaluation)
+-r requirements.txt
+matplotlib
+seaborn
+jupyter
