@@ -21,6 +21,8 @@ pydantic[email]
 
 # File uploads and receipt handling
 python-multipart
+pillow
+pypdf
 
 # Data processing and anomaly detection
 numpy
