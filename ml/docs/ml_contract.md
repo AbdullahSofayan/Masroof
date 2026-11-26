@@ -1,20 +1,20 @@
 # ML Contract — Masroof Anomaly Detection
 
 **Owner:** ML (Jassar) · **For:** Backend (`backend/expense`, `backend/finance`), Frontend (`frontend/employee-manager`)
-**Version:** v0.4.5 — 23 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) and the Step 4 demo data · C10 = how it fits Omar's first `backend/expense` code · v0.4.4 = Step 8 results: 13 reason codes, real risk levels (model `iforest-0.2`) · v0.4.5 = optional `category_limit` in the score request
-**Stub:** the ML service works now with fake scores (`stub-0.2`). The real model (Step 9) keeps the same endpoints and fields.
+**Version:** v0.5.0 — 26 Nov 2026 · Based on the **final ERD** (Abdulaziz, 18 Nov) · **the real model is live** (`iforest-0.2`, Step 9) · C11 = check of the backend's 26 Nov AI code · seed files ready (Part E)
+**Model:** the real model replaced the stub on 23 Nov (`model_version` `iforest-0.2`). Same endpoints and fields as the stub; the stub's testing hooks are gone (F1).
 
 Everything the backend and frontend need from ML is in this file.
-If something here needs to change, tell ML first, so the stub and the real model stay in sync.
+If something here needs to change, tell ML first, so the service and this file stay in sync.
 
 | Part | For | Contents |
 |---|---|---|
 | A | Everyone | What the model does, how it fits in, who sees what, ports |
 | B | Backend | The ML service API + which response field goes into which EXPENSE column |
-| C | Backend | Integration code written against the ERD (adjust names to your code); C10 = review of the first `backend/expense` code |
+| C | Backend | Integration code written against the ERD (adjust names to your code); C10 = review of the first `backend/expense` code; C11 = review of the 26 Nov AI code |
 | D | Frontend | Badge, AI reasons vs rule warnings, screens per role, categories, statuses, texts, mock data |
 | E | Backend | Seed data: files, columns, ID ranges, import order, limits, budget |
-| F | Everyone | Testing with the stub, what changes later, mentor feedback, open questions, changelog |
+| F | Everyone | Testing with the real model, what changed in Step 9, mentor feedback, open questions, changelog |
 
 ---
 
@@ -118,6 +118,12 @@ uvicorn src.service:app --port 8001 --reload
 
 Swagger docs: **http://localhost:8001/docs**
 
+The service needs three files from `ml/models/` (all in git): `isolation_forest.joblib` (the model),
+`model_config.json` (settings) and `history.joblib` (the requests it compares new ones with, dates moved +21 weeks, E2).
+Every request it scores is added to that history and also written to `ml/data/service/added_requests.csv`
+(git-ignored), so a restart doesn't forget it. **Before the demo, stop the service and delete that file** if it only
+holds test requests. One request takes ~30–60 ms.
+
 Backend `.env`:
 
 ```
@@ -138,14 +144,15 @@ Optional Docker (in your `docker-compose.yml`, under `services:`; adjust the pat
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | `{"status": "ok", "model_version": "..."}` |
+| GET | `/health` | `{"status": "ok", "model_version": "iforest-0.2", "history": {"requests": 209012, "added_since_training": 0, "latest_date": "2026-11-22"}}` |
 | POST | `/anomaly/score` | Score one request |
-| POST | `/anomaly/score-batch` | Score up to 500 requests in one call (re-scoring, seed history) |
+| POST | `/anomaly/score-batch` | Score up to 500 requests in one call (re-scoring). **Send ≤ 200 per call**: 500 took 15–27 s on a laptop, close to the 30 s timeout |
 | GET | `/anomaly/categories` | The 6 category names the model accepts |
 | GET | `/anomaly/reasons` | Every reason code with English + Arabic text |
 
-Paths start with `/anomaly/` so other AI features (forecasting, receipt reading) can be added under their
-own prefix later, behind the same `AI_SERVICE_URL`.
+Paths start with `/anomaly/` so other AI features can be added under their own prefix later. Forecasting does **not**
+go through this service: Yousef's `GET /forecast?department_id=` (`backend/finance-routes`) loads `ml/src/forecast.py`
+inside the backend.
 
 ## B3. `POST /anomaly/score` — request
 
@@ -156,7 +163,7 @@ own prefix later, behind the same `AI_SERVICE_URL`.
   "department_id": 1,
   "category": "Office Supplies",
   "amount": "2500.00",
-  "expense_date": "2026-06-25",
+  "expense_date": "2026-11-25",
   "same_day_requests": [
     {"expense_id": 347900, "category": "Office Supplies", "amount": "2400.00"}
   ],
@@ -180,6 +187,12 @@ ML's copy of the limits goes out of date after an edit: e.g. Food raised 2,000 �
 would still be flagged "possible split to stay under a limit" although they're under the new limit. The limit is used **only by
 the split rule**, not by the model (no retraining when a limit changes). One value covers the day's requests: the split rule only
 looks at same-category requests, and they share one limit.
+
+**All the other requests that day, with smaller AND bigger ids** (`Expense.id != expense.id`, not `<`). When an earlier
+request is edited, the later ones of that day must be in the list too, and C3 re-scores the others after every new request.
+Tested 26 Nov with the real model (3 Food requests on one day, 750 + 680 + 690 = 2,120 SAR > the 2,000 limit):
+earlier ids only and no re-scoring → saved as **low, low, medium** (only the last part flagged); all others + re-scoring
+(C3) → **medium, medium, medium**.
 
 Rejected requests are included on purpose: someone who splits a request and gets one part rejected is
 still splitting.
@@ -211,7 +224,7 @@ There is **no "Other" category**: the model is trained only on these 6. Any othe
       "text_ar": "عدة طلبات في نفس الفئة لنفس اليوم (احتمال تجزئة الطلب للبقاء تحت الحد المسموح)"
     }
   ],
-  "model_version": "stub-0.2"
+  "model_version": "iforest-0.2"
 }
 ```
 
@@ -226,7 +239,7 @@ There is **no "Other" category**: the model is trained only on these 6. Any othe
 
 ## B5. `POST /anomaly/score-batch`
 
-Request: `{"items": [ <same body as /anomaly/score>, ... ]}` (max 500)
+Request: `{"items": [ <same body as /anomaly/score>, ... ]}` (max 500; **send ≤ 200 per call**, ~30–60 ms each)
 Response: `{"results": [ <same response as /anomaly/score>, ... ]}` (same order)
 
 ## B6. Errors
@@ -467,7 +480,8 @@ expense.warnings = warnings          # [] when no rule was broken (the ERD's war
 
 ## C6. Re-scoring — `app/rescore_ai.py`
 
-For requests saved while the ML service was down, for the seed history, and after a new model version.
+For requests saved while the ML service was down, and after a new model version. **Not needed for the seed:** ML fills the
+AI columns in `expenses.csv` (E2); re-scoring the seed would give exactly the same values, but takes ~1.5–2 hours.
 
 ```python
 """Score expenses with the ML service.
@@ -483,7 +497,7 @@ from app.models.expense import Expense
 from app.services import ai_client
 from app.services.anomaly_service import save_result
 
-BATCH_SIZE = 500
+BATCH_SIZE = 200          # 500 can take ~27 s on a laptop; the batch timeout (C2) is 30 s
 
 
 def run(rescore_all: bool) -> None:
@@ -652,6 +666,27 @@ aren't set yet; the approve/reject section is titled "Finance Admin", but the de
 `decision_engine` imports `finance_service`, which is on `backend/finance` → merge that branch first
 (on `backend/expense` alone the test fails with `ModuleNotFoundError`).
 
+
+## C11. Check of the backend's AI code (26 Nov, `backend/expense`)
+
+Omar's `services/anomaly_service.py` (26 Nov) connects the backend to the ML service.
+
+**Already matches ✅**
+- Scores **after saving, in a background task**, on create and after an edit that changes something (C3, C4).
+- Saves `score` → `anomaly_score`, `risk_level`, `reason_details` → `risk_justification`. **The 4 C10 fixes are all done.**
+- ML down / bad answer → logged, AI columns stay empty, the request is still saved (C2, B6).
+
+**3 changes for the AI part**
+
+| # | Now | Change | Why |
+|---|---|---|---|
+| 1 | Same-day list: `Expense.id < expense.id`; nothing re-scored | `Expense.id != expense.id`, then re-score the employee's other **Pending** requests of that day (C3 `score_expense_and_siblings`) | Splits: today only the **last** part gets flagged (test in B3: low, low, medium → should be medium ×3) |
+| 2 | No `category_limit` in the payload | Add `"category_limit": (str(expense.category.expense_limit.max_amount) if expense.category.expense_limit else None)` (C2) | Optional, but without it the split rule uses ML's copy of the limits, which goes out of date when finance edits one |
+| 3 | `ai_analysis = {risk_level, warnings: [text_en, …]}` + top-level `risk_level` and **`anomaly_score`** returned to **every role** (employee on own requests; finance now gets the company-wide list) | Keep the name `ai_analysis` (Ziyad's `RiskAlertBox` already reads it), but: only for the **manager of the request's department**; list called `reasons` with `{code, text_en, text_ar}` (Arabic too); **no `anomaly_score`** in any response (C7) | Employees see nothing about the AI; the score isn't a probability; AI reasons ≠ policy `warnings` (D3) |
+
+Still to write: `rescore_ai.py` (C6, for requests missed while ML was down) and the Pending queue order (C8). Status is now
+returned lowercase (`pending` / `approved` / `rejected`): fine, the frontend already handles it (D5).
+
 ---
 
 # Part D — Frontend
@@ -789,9 +824,22 @@ For realistic requests to design with, use `ml/docs/samples/sample_requests.csv`
 
 ## E1. Status
 
-The ERD is final (OK'd 18 Nov; final version checked 18 Nov evening), so the format below is fixed. **ML exports the files when the team says
-go** — after deciding how much history goes in (E7). Don't import the Step 4 training files
-(`requests.csv`, `users.csv`, `departments.csv`): they have extra ML-only columns.
+✅ **The 6 files are ready (26 Nov)**, in the format below, shared by ML as a zip (they're not in git: `expenses.csv` is
+17.8 MB). Defaults until the team decides otherwise: all 20 departments, the last 26 weeks (E7), budgets ×1.1 (E6).
+Don't import the Step 4 training files (`requests.csv`, `users.csv`, `departments.csv`): they have extra ML-only columns.
+
+| File | Rows |
+|---|---|
+| `categories.csv` | 6 |
+| `departments.csv` | 20 |
+| `users.csv` | 4,586 (4,564 employees, 20 managers, 2 finance admins) |
+| `expense_limits.csv` | 6 |
+| `budget.csv` | 180 (20 departments × May 2026 → Jan 2027) |
+| `expenses.csv` | 106,618 (24 May → 22 Nov 2026), **AI columns filled** |
+
+UTF-8, comma-separated, **Windows line endings (`\r\n`)**: fine for Python's `csv` / pandas; MySQL `LOAD DATA` needs
+`LINES TERMINATED BY '\r\n'`. Empty cells = NULL (e.g. `department_id` of finance admins, `risk_justification` of
+low-risk requests).
 
 ## E2. Files and columns
 
@@ -855,18 +903,22 @@ No password in the file: the seed script sets one demo password (E4).
 | `category_id` | 5 | |
 | `amount` | 251.25 | SAR |
 | `description` | Computer accessories | Generated |
-| `expense_date` | 2026-06-25 | |
+| `expense_date` | 2026-11-19 | Dates moved +21 weeks so the history ends just before the demo (same weekdays) |
 | `status` | Approved | History is already decided |
 | `reviewed_by` | 101 | The department's manager |
-| `reviewed_at` | 2026-06-26 10:30:00 | |
+| `reviewed_at` | 2026-11-20 10:30:00 | 1–26 hours after `created_at` |
 | `manager_note` | *(empty)* | |
 | `receipt_path` | *(empty)* | |
 | `warnings` | `[]` | Empty list (history has no rule warnings) |
-| `created_at` | 2026-06-25 16:02:00 | |
-| `updated_at` | 2026-06-26 10:30:00 | |
+| `created_at` | 2026-11-19 16:02:00 | |
+| `updated_at` | 2026-11-20 10:30:00 | = `reviewed_at` |
+| `anomaly_score` | 0.412873 | 🆕 Filled by ML (pre-scored) |
+| `risk_level` | low | 🆕 `low` / `medium` / `high` (0.80% high, 4.06% medium) |
+| `risk_justification` | `[{"code": "round_amount", "text_en": "…", "text_ar": "…"}]` | 🆕 JSON list, same shape as `reason_details`; empty for low |
 
-`anomaly_score`, `risk_level`, `risk_justification` are left **empty**: run `python -m app.rescore_ai`
-after the import (E4).
+**Pre-scored (26 Nov):** ML filled the 3 AI columns with the real model. They are **exactly** what the service would return
+for each row (checked on 300 rows: same score, level and reasons), so the dashboard has AI history from the first minute
+and `rescore_ai` isn't needed for the seed.
 
 ## E3. ID ranges
 
@@ -897,7 +949,9 @@ and `expenses.csv`. Their ids are simply unused — don't reuse them for test us
 3. **One demo password for all seeded users** (e.g. `DEMO_USER_PASSWORD` in `.env`): hash it **once** and
    reuse the hash. Hashing thousands of passwords one by one is slow.
 4. Make the seed idempotent: skip rows whose id already exists.
-5. Afterwards run `python -m app.rescore_ai` so the history has AI results for the dashboard.
+5. ~~Afterwards run `python -m app.rescore_ai`~~ Not needed: the AI columns come filled (E2). `rescore_ai` is only for
+   requests missed while ML was down (C6).
+6. The loader isn't written yet: `api/app/services/seed.py` only creates the 6 categories.
 
 ## E5. Category limits (`expense_limits`)
 
@@ -915,41 +969,53 @@ means something. **A limit applies to one request at a time** (not a daily or mo
 These are the starting values. When the finance admin edits a limit, the backend sends the new one with each score request
 (`category_limit`, B3); ML keeps these values only as a fallback (`model_config.json`).
 
-## E6. Budget (proposal — team decides)
+## E6. Budget (default used in `budget.csv` — team can change it)
 
-The demo data has no budgets. Proposal: for each department and month, **the department's average
-monthly spending × 1.1**, so most months stay under budget and a few go over. ML generates `budget.csv`
-from the data once the team agrees (or uses numbers the team gives).
+For each department: **its average monthly spending × 1.1**, rounded to 1,000 SAR (179,000 → 5,368,000 SAR a month). The
+average uses only the **11 whole months of the real year** (Dec 2025 – Oct 2026); Nov 2025 is almost empty after the date
+move and would pull it down. Same amount for every month from May 2026 to Jan 2027 (the seed months + 2 demo months).
+Spending comes in bursts, so **30% of department-months go over** (×1.25 would give 13%), and **4 of 20 departments are
+already over their November budget** by 22 Nov: a demo request there will always show the policy "over budget" warning.
+The finance admin can edit any budget in the app; for other numbers, tell ML (one setting).
 
 ## E7. How much history
 
-**Recommendation:** a few departments and the last ~6 months. The dashboard still looks full and the
-import is fast. The model doesn't need the history in MySQL — it keeps its own statistics.
-Team decides; ML exports exactly that.
+**Default in the files (26 Nov): all 20 departments, the last 26 weeks** (24 May → 22 Nov 2026, Sunday to Sunday, so
+the weeks match the forecast's Sunday–Saturday weeks). The model doesn't need the history in MySQL: the ML service keeps
+**its own copy of the full history** (`models/history.joblib`, 209,012 requests), so fewer rows in the database changes
+nothing for the AI. For a different amount (fewer weeks or departments), tell ML: one setting, files in a few minutes.
 
 ---
 
 # Part F — Testing, changes, mentor feedback, open questions
 
-## F1. Testing with the stub
+## F1. Testing with the real model
 
-The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
+The stub's testing hooks are gone (an amount over 10,000 no longer forces `high`). Requests that give a known answer
+(dates after the history, so they work on any day of the demo):
 
-- The **same `expense_id` always gets the same result** (repeatable tests).
-- **`amount` over 10,000** → always `high` with `large_amount`.
-- **2 or more same-category requests in `same_day_requests`** → always `high` with `possible_split_request`.
-- A category outside the 6 → **422** (name mismatches show up on the first test).
-- To test "Not analyzed yet": stop the ML service, submit a request, check the AI columns are empty,
-  start it again, run `python -m app.rescore_ai`.
+| Request | Expected |
+|---|---|
+| Employee 1734 (department 1), Food, 55.00, 2026-11-25 | `low`, no reasons |
+| Employee 1734, Food, 1,850.00, 2026-11-27 (a Friday) | `high`: `weekend_expense`, `amount_high_for_employee_category` |
+| Employee 3639 (department 20), 3 Food requests on 2026-11-25: 750, 680, 690 | all 3 `medium` with `possible_split_request` (if C3 re-scores) |
+| The same, with `category_limit` 3000 | `low` |
+| Employee 3639, Travel, 2,340.50 on 2026-11-23, then the same on 2026-11-26 | second one `medium`: `duplicate_recent_request` |
+| Category "Other" | **422** |
 
-## F2. What changes when the real model arrives (Step 9)
+- The service **remembers** every request it scores (B1): test requests change later answers for that employee. Delete
+  `ml/data/service/added_requests.csv` (service stopped) after testing.
+- "Not analyzed yet": stop the ML service, submit a request, check the AI columns are empty, start it again, run
+  `python -m app.rescore_ai`.
 
-- Only the inside of `ml/src/predict.py` changes. **Endpoints, request and response stay the same.**
-- `model_version` changes from `stub-0.2` to `iforest-0.2`. Run `python -m app.rescore_ai` for anything not scored yet.
+## F2. What changed when the real model arrived (Step 9, done 23 Nov)
+
+- Only the inside of `ml/src/predict.py` changed (+ `ml/src/history.py`). **Endpoints, request and response stayed the same.**
+- `model_version` is `iforest-0.2`. Run `python -m app.rescore_ai` for anything scored by the stub or not scored yet.
+- `scikit-learn` is pinned to **1.9.1** in `ml/requirements.txt` (the saved model may not load in another version).
 - **Risk levels** (set from review capacity, MF4): `high` = the model's most unusual 1% (careful check);
   `medium` = the model's next 0.5% **or** any rule (quick look). On the demo history ≈1% high, ≈3.5% medium.
 - **A split now gives `medium`** (with `possible_split_request`), not `high`: `high` is kept for the model's top 1%.
-  The stub still forces `high` for 2+ same-category requests (F1): that's a testing hook only.
 - 13 reason codes (B7). Up to 3 per request, rules first, then the model's strongest reasons.
 - The new time rules (receipt reused within 7 days, 90+ days without requests) need each employee's recent requests:
   **the ML service keeps them itself** (it sees every request it scores), so the backend sends nothing new for them.
@@ -969,23 +1035,24 @@ The stub returns **fake** scores, roughly 80% low / 15% medium / 5% high.
 | Question | Who | Status |
 |---|---|---|
 | How many flagged requests can a manager realistically review per week? (MF4) | Team | Proposed: high = top 1% (≈11 careful checks/week for the biggest department, < 1 for a typical one); ≈5% flagged in total with the rules. Used as the default; waiting for OK |
-| Seed history pre-scored by ML (AI columns filled in `expenses.csv`) instead of `rescore_ai` on old rows (E2/E4) | ML → backend | Proposed by ML, deciding |
+| Seed history pre-scored by ML (AI columns filled in `expenses.csv`) instead of `rescore_ai` on old rows (E2/E4) | ML | ✅ Decided 23 Nov, done 26 Nov: pre-scored (identical to re-scoring, 2 hours faster) |
 | Backend sends the current `category_limit` with each score request (limits are editable in the app) (B3) | ML → backend | ✅ Decided (23 Nov): optional field in B3, code in C2. Backend: add it to `_payload`. ML falls back to its copy if missing |
-| How much history goes into the demo database? (E7) | Team / Backend | Open |
+| How much history goes into the demo database? (E7) | Team / Backend | Default in the files: all 20 departments, last 26 weeks. Change on request |
 | Block or warn when a request is over its category limit? Add the same-day total rule? (C5) | Backend + team | Open |
-| Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Open |
+| Budget amounts: the ×1.1 proposal or the team's numbers? (E6) | Team | Default in the files: average whole month ×1.1 (30% of months over). Change on request |
 | Who builds receipt reading (`/receipt/...`)? | Team | Open |
-| Does forecasting join this service (`/forecast/...`) or get its own URL? | Forecasting + backend | Open |
+| Does forecasting join this service (`/forecast/...`) or get its own URL? | Forecasting + backend | ✅ Neither: it runs inside the backend (Yousef's `GET /forecast`, loads `ml/src/forecast.py`, 25 Nov) |
 | Is the index on `expense (requester_id, expense_date)` in the model? (C1; ERD diagrams don't show indexes) | Backend | To confirm |
-| Align Part C with the real backend code | ML | 🟡 First version checked in C10 (18 Nov). Check again when MySQL + the ML call are added |
+| Align Part C with the real backend code | ML | 🟡 C10 (18 Nov) all fixed; C11 (26 Nov): 3 changes left (same-day list + re-score, `category_limit`, who sees the AI) |
 
 ## F5. Changing this contract
 
-Any change (a field, a category name, an endpoint) goes through ML first. ML updates the stub and this
+Any change (a field, a category name, an endpoint) goes through ML first. ML updates the service and this
 file, then tells both teams. The version at the top goes up with every change.
 
 | Version | Date | Changes |
 |---|---|---|
+| v0.5.0 | 26 Nov | **Real model live** (header, F1 test requests, F2); B1 model files + remembered requests; B2 `/health` history + batches ≤ 200; B3 same-day list = all other ids (test: low/low/medium vs medium ×3); C6 not needed for the seed, batch 200; **C11 check of the 26 Nov backend code**; E1/E2/E4/E6/E7: seed files ready, pre-scored, dates +21 weeks, budget and history defaults; forecasting runs in the backend (B2, F4) |
 | v0.4.5 | 23 Nov | Decided: optional `category_limit` in the score request (B3), sent from `expense_limits` in `_payload` (C2); E5 limits become ML's fallback (E5, F2, F4) |
 | v0.4.4 | 23 Nov | Step 8 results: 13 reason codes (+3: `duplicate_recent_request`, `unusual_amount_digits`, `returning_after_long_break`) (B7); real risk levels + split = medium (A1, F2); open ML proposals in F4 |
 | v0.4.3 | 18 Nov | Final ERD check (all agreed changes in): `users.csv` without `is_active` (not in the ERD); `warnings` saved as `[]` instead of null (C5, D1, E2) |

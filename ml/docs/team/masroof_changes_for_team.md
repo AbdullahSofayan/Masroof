@@ -4,7 +4,9 @@
 
 **✅ Status (18 Nov): the backend confirmed OK on all the ERD changes below, and the final ERD (Abdulaziz, 18 Nov evening) has all of them.** Omar's first code is on `backend/expense` (18 Nov) → checked in **"Repo check — 18 Nov (afternoon)"** at the end: 4 changes for the AI part.
 
-**🆕 Latest (23 Nov):** the model is finished and tested → see **"Update — 23 Nov"** near the end (3 new reason codes, how many requests get flagged, `category_limit` to send, 1 question for the backend).
+**🆕 Latest (26 Nov): the real model is live and the seed files are ready** → see **"Update — 26 Nov"** near the end (3 fixes for Omar, the seed loader, 2 fixes for the AI box). Contract **v0.5.0**.
+
+**Earlier (23 Nov):** the model is finished and tested → "Update — 23 Nov" (3 new reason codes, how many requests get flagged, `category_limit`).
 
 These changes let the backend store and show the AI model's results correctly.
 Each one has a reason, so you can push back if something doesn't fit.
@@ -97,7 +99,7 @@ backend reject it, so a request never sits in "Pending" forever.
 - The ML service **never connects to the database** — the backend sends the data.
 - Score in a **background task** after a request is created or edited, so the employee never waits.
 - If the ML service is down, **save the request anyway** with no AI result, and score it later.
-- Full details: `ml/docs/ml_contract.md` (**v0.4.5**, matches the final ERD) on the `ml/stub-service` branch.
+- Full details: `ml/docs/ml_contract.md` (**v0.5.0**, matches the final ERD) on the `ml/stub-service` branch.
   Backend → Parts B, C, E · Frontend → Part D. Part C is reference code written against the ERD; **C10** checks it against Omar's first `backend/expense` code.
 
 ---
@@ -320,6 +322,50 @@ The model is tested and its settings are final (`iforest-0.2`). The response sha
 - (a) **Seed history:** ML can send `expenses.csv` with the AI columns already filled (it takes ML a few minutes). Running `rescore_ai` on the ~200k old rows through the real service also gives correct results (the service only compares each request with earlier days), but it takes about 1.5–2 hours. Which do you prefer? *(Corrected 23 Nov: an earlier version said live re-scoring would be wrong; with the real service it isn't, it's only slow.)*
 
 ML side: PR `ml/stub-service` → `main` is open (only adds `ml/`); please review and merge it.
+
+---
+
+## Update — 26 Nov: the real model is live + seed files ready · contract v0.5.0
+
+**The ML service now runs the real model** (`iforest-0.2`). Same endpoints and fields as the stub, so nothing to change
+to start using it. Start it from `ml/`: `pip install -r requirements.txt` then `uvicorn src.service:app --port 8001`.
+The stub's test shortcuts are gone (amount > 10,000 no longer forces high); test requests with known answers are in contract F1.
+
+### Backend (Omar) — the AI call works ✅, 3 changes left (contract C11)
+Thank you: `anomaly_service.py` scores after saving in a background task and saves the score, level and reasons —
+all 4 earlier C10 fixes are done.
+
+| # | Change | Why |
+|---|---|---|
+| 1 | In `score_saved_expense`: `Expense.id < expense.id` → **`Expense.id != expense.id`**, then **re-score the employee's other Pending requests of that day** | Tested with the real model: a 3-part split (750 + 680 + 690 Food on one day) is saved **low, low, medium** today — only the last part is flagged. With the change: **medium, medium, medium** |
+| 2 | Add to the payload: `"category_limit": (str(expense.category.expense_limit.max_amount) if expense.category.expense_limit else None)` | When finance edits a limit, the split rule uses the new one (optional: without it ML uses its own copy) |
+| 3 | `ai_analysis` only for the **manager of the request's department**; call the list **`reasons`** with `{code, text_en, text_ar}`; **remove `anomaly_score`** from every response | Today employees (on their own requests) and finance (company-wide list) get the AI fields and the score too. Employees should see nothing; the score isn't a probability |
+
+Still to write: `rescore_ai.py` (C6, for requests saved while ML was down; use batches of **≤ 200**: 500 took ~27 s on a
+laptop, the timeout is 30 s) and the Pending queue order (C8: high → medium → low → not scored, then oldest first).
+
+### Backend — the seed (contract Part E)
+- **The 6 files are ready** (ML sends them as a zip; not in git): `categories` 6, `departments` 20, `users` 4,586,
+  `expense_limits` 6, `budget` 180, `expenses` 106,618 (last 26 weeks, all 20 departments).
+- **The AI columns are already filled** (pre-scored, identical to what the service returns) → no need to run `rescore_ai` on the seed.
+- **Dates are moved forward 21 weeks** (history 24 May → 22 Nov 2026), so the demo starts right after the history and
+  Yousef's forecast finds the last 8 weeks.
+- **Someone needs to write the loader**: `api/app/services/seed.py` only creates the 6 categories. Rules in E4: keep the ids,
+  the import order, skip ids that exist, one demo password hashed once. Windows line endings (`\r\n`).
+- Defaults we picked (change on request, one setting each): 26 weeks of history (E7), budgets = average month × 1.1 (E6:
+  30% of months go over; 4 departments are already over their November budget).
+- After testing, stop the ML service and delete `ml/data/service/added_requests.csv`: the service remembers every request it scores.
+
+### Frontend (Ziyad) — the manager's AI box (contract D2, D3)
+- `RiskAlertBox`: read **`analysis.reasons`** and show `text_ar` in Arabic / `text_en` in English (once Omar renames it, #3).
+- Remove the **"Anomaly score: X%"** line (it doesn't show today only because the backend doesn't send a score).
+- Still open: the risk badge in the manager's queue (C8).
+
+### Forecasting
+Yousef's `GET /forecast?department_id=` loads `ml/src/forecast.py` inside the backend, so forecasting doesn't go through the
+ML service. It needs `ml/forecasting` merged and pandas + scikit-learn in the backend's environment (Abdullah + Yousef).
+
+ML side: PR #6 (`ml/stub-service` → `main`) is still open — please review and merge it.
 
 ---
 
