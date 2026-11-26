@@ -269,12 +269,12 @@ describe("UI behavior with unavailable browser animation APIs", () => {
       host.querySelector('[role="group"][aria-label="Spend timeframe"]'),
     ).not.toBeNull();
     expect(button("All time").getAttribute("aria-pressed")).toBe("true");
-    expect(headline()).toBe("280.00");
+    expect(headline()).toBe("190.00");
     expect(metrics()).toEqual(["190.00", "90.00", "90.00", "43%"]);
     await act(async () => button("Daily").click());
     expect(button("Daily").getAttribute("aria-pressed")).toBe("true");
     expect(button("All time").getAttribute("aria-pressed")).toBe("false");
-    expect(headline()).toBe("120.00");
+    expect(headline()).toBe("100.00");
     expect(host.querySelector(".hero-request-count").textContent).toContain(
       "2 requests",
     );
@@ -284,14 +284,14 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     await act(async () => button("Weekly").click());
     expect(button("Weekly").getAttribute("aria-pressed")).toBe("true");
     expect(button("Daily").getAttribute("aria-pressed")).toBe("false");
-    expect(headline()).toBe("190.00");
+    expect(headline()).toBe("100.00");
     expect(host.querySelector(".hero-request-count").textContent).toContain(
       "4 requests",
     );
     expect(metrics()).toEqual(["100.00", "90.00", "30.00", "25%"]);
     expect(allocations()).toHaveLength(2);
     await act(async () => button("All time").click());
-    expect(headline()).toBe("280.00");
+    expect(headline()).toBe("190.00");
     expect(host.querySelector(".hero-request-count").textContent).toContain(
       "7 requests",
     );
@@ -323,7 +323,35 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
   });
 
-  it("deducts newly rejected claims from spend in every timeframe while retaining request metrics", async () => {
+  it("calculates Company spend from approved expenses only, excluding pending in every timeframe", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-17T09:00:00Z"));
+    await render(
+      <SummaryCards
+        title="Company spend"
+        expenses={[
+          { date: "2026-11-17", amount: "120.50", status: STATUS.APPROVED },
+          { date: "2026-11-17", amount: "79.50", status: "Approved" },
+          { date: "2026-11-17", amount: "500", status: STATUS.PENDING },
+          { date: "2026-11-17", amount: "40", status: STATUS.REJECTED },
+          { date: "2026-11-17", amount: "15", status: "draft" },
+        ]}
+      />,
+    );
+    for (const timeframe of ["All time", "Daily", "Weekly"]) {
+      await act(async () => button(timeframe).click());
+      expect(host.querySelector(".hero-number .sr-only").textContent).toBe(
+        "200.00",
+      );
+      expect(
+        [...host.querySelectorAll(".hero-metrics .sr-only")]
+          .slice(0, 2)
+          .map((node) => node.textContent),
+      ).toEqual(["200.00", "500.00"]);
+    }
+  });
+
+  it("excludes pending and newly rejected claims from spend in every timeframe while retaining request metrics", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-17T09:00:00Z"));
     const expense = {
@@ -333,7 +361,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     };
     await render(<SummaryCards expenses={[expense]} />);
     expect(host.querySelector(".hero-number .sr-only").textContent).toBe(
-      "250.00",
+      "0.00",
     );
     await render(
       <SummaryCards expenses={[{ ...expense, status: STATUS.REJECTED }]} />,
@@ -398,7 +426,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
         ),
       );
       expect(host.querySelector(".hero-number .sr-only").textContent).toBe(
-        "400.00",
+        "100.00",
       );
       const categories = host.querySelector('[aria-label="Spend by Category"]');
       expect(
@@ -773,7 +801,7 @@ describe("UI behavior with unavailable browser animation APIs", () => {
     vi.spyOn(api, "allExpenses").mockResolvedValue(expenses);
     await render(router(<EmployeeDashboard />));
     const total = expenses
-      .filter((expense) => expense.status !== STATUS.REJECTED)
+      .filter((expense) => expense.status === STATUS.APPROVED)
       .reduce((sum, expense) => sum + Number(expense.amount), 0);
     expect(host.textContent).toContain(
       total.toLocaleString("en-US", { minimumFractionDigits: 2 }),

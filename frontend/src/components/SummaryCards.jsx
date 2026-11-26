@@ -32,20 +32,19 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
         });
   const sum = (items) =>
     items.reduce((total, expense) => total + (Number(expense.amount) || 0), 0);
-  const approved = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.APPROVED,
-  );
-  const pending = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.PENDING,
-  );
-  const rejected = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.REJECTED,
-  );
-  const total = sum(
-    visibleExpenses.filter((expense) => expense.status !== STATUS.REJECTED),
-  );
+  const byStatus = (status) =>
+    visibleExpenses.filter(
+      (expense) => String(expense.status ?? "").toLowerCase() === status,
+    );
+  const approved = byStatus(STATUS.APPROVED);
+  const pending = byStatus(STATUS.PENDING);
+  const rejected = byStatus(STATUS.REJECTED);
   const approvedTotal = sum(approved);
   const pendingTotal = sum(pending);
+  // Headline spend reflects actual spend: approved requests only.
+  const total = approvedTotal;
+  // Allocation bar compares approved vs pending (rejected excluded).
+  const allocationTotal = approvedTotal + pendingTotal;
   const segments = [
     { label: "Approved", amount: approvedTotal, className: "bg-[#DCEACB]" },
     { label: "Pending", amount: pendingTotal, className: "bg-[#9FB699]" },
@@ -123,7 +122,7 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
                 key={segment.label}
                 className={`h-full rounded-full ${segment.className}`}
                 style={{
-                  width: `${total > 0 ? (segment.amount / total) * 100 : 0}%`,
+                  width: `${allocationTotal > 0 ? (segment.amount / allocationTotal) * 100 : 0}%`,
                 }}
               />
             ))}
@@ -140,12 +139,15 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
                 />
                 {segment.label}
                 <span className="tabular-nums text-white">
-                  {total > 0 ? Math.round((segment.amount / total) * 100) : 0}%
+                  {allocationTotal > 0
+                    ? Math.round((segment.amount / allocationTotal) * 100)
+                    : 0}
+                  %
                 </span>
               </span>
             ))}
           </div>
-          <p className="sr-only">Rejected requests are excluded from spend.</p>
+          <p className="sr-only">Spend includes approved requests only; pending and rejected requests are excluded.</p>
         </div>
         <dl className="hero-metrics mt-auto grid gap-x-4 gap-y-4 border-t border-white/20">
           {metrics.map((metric) => (
