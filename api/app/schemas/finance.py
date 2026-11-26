@@ -126,3 +126,24 @@ class ForecastRead(BaseModel):
     history: list[WeekActual] = Field(description="Last 8 completed weeks, oldest first.")
     weeks: list[WeekPredicted] = Field(description="Next 4 weeks, starting with the current week.")
     baseline_last_week: Decimal = Field(description="Last completed week's total, the simple baseline.")
+    
+
+class DepartmentForecast(BaseModel):
+    department_id: int
+    department_name: str
+    weeks: list[WeekPredicted] = Field(description="Next 4 weeks, starting with the current week.")
+    total_predicted: Decimal = Field(description="The 4 predicted weeks added up.")
+
+
+class SkippedDepartment(BaseModel):
+    department_id: int
+    department_name: str
+    reason: str = Field(description="Why this department has no forecast.")
+
+
+class AllForecastRead(BaseModel):
+    model: str = Field(description="Name of the forecasting model.")
+    generated_for_week: date = Field(description="Sunday of the first predicted week (the current week).")
+    departments: list[DepartmentForecast] = Field(description="Highest predicted total first.")
+    company_weeks: list[WeekPredicted] = Field(description="All departments added up, week by week.")
+    skipped: list[SkippedDepartment] = Field(description="Departments that could not be forecast, and why.")

@@ -19,6 +19,7 @@ from app.models.expense import Expense
 from app.models.expense_limit import ExpenseLimit
 from app.models.user import User
 from app.schemas.finance import (
+    AllForecastRead,
     AnomalySummary,
     BudgetCreate,
     BudgetRead,
@@ -41,6 +42,10 @@ _finance = require_roles(UserRole.FINANCE_ADMIN)
 HISTORY_WEEKS = 8
 MODEL_INPUT_WEEKS = 4
 FORECAST_WEEKS = 4
+
+
+class NotEnoughHistory(Exception):
+    """The department has fewer than 4 completed weeks of approved spending."""
 
 
 def approved_spent(db: Session, department_id: int, year: int, month: int) -> Decimal:
@@ -77,6 +82,61 @@ def check_manager(db: Session, manager_id: int, department_id: int | None = None
         query = query.where(Department.id != department_id)
     if db.scalar(query):
         raise HTTPException(status_code=409, detail="This manager already manages another department")
+
+
+def build_forecast(db: Session, department_id: int, predict, today: date) -> dict:
+    """Weekly history and the 4-week prediction for one department.
+
+    Raises NotEnoughHistory, or ValueError when the model rejects the department.
+    """
+    weeks = completed_weeks(today, HISTORY_WEEKS)
+    this_week = week_start(today)
+    model_weeks = weeks[-MODEL_INPUT_WEEKS:]
+
+    first_day = db.scalar(
+        select(func.min(Expense.expense_date)).where(
+            Expense.department_id == department_id,
+            Expense.status == ExpenseStatus.APPROVED,
+        )
+    )
+    if first_day is None or week_start(first_day) > model_weeks[0]:
+        raise NotEnoughHistory("Not enough history: the forecast needs 4 completed weeks of approved spending")
+    history_start = week_start(first_day)
+
+    rows = db.execute(
+        select(Expense.expense_date, Expense.amount).where(
+            Expense.department_id == department_id,
+            Expense.status == ExpenseStatus.APPROVED,
+            Expense.expense_date >= weeks[0],
+            Expense.expense_date < this_week,
+        )
+    ).all()
+    totals = weekly_totals([(row.expense_date, row.amount) for row in rows], weeks)
+
+    predictions = predict(department_id, [float(total) for total in totals[-MODEL_INPUT_WEEKS:]])
+    upcoming = [this_week + timedelta(weeks=n) for n in range(FORECAST_WEEKS)]
+    return {
+        "department_id": department_id,
+        "model": MODEL_NAME,
+        "generated_for_week": this_week,
+        "history": [
+            {"week_start": start, "actual": total if start >= history_start else None}
+            for start, total in zip(weeks, totals)
+        ],
+        "weeks": [
+            {"week_start": start, "predicted": Decimal(str(value))}
+            for start, value in zip(upcoming, predictions)
+        ],
+        "baseline_last_week": totals[-1],
+    }
+
+
+def load_predictor():
+    """The forecasting model, or 503 when it is not installed on this server."""
+    try:
+        return get_predictor()
+    except ForecastUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 # ---------- Departments ----------
@@ -295,58 +355,53 @@ def department_forecast(
     """Predict a department's spending for the next 4 weeks from its approved weekly spending."""
     if db.get(Department, department_id) is None:
         raise HTTPException(status_code=404, detail="Department not found")
+    predict = load_predictor()
     try:
-        predict = get_predictor()
-    except ForecastUnavailable as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-
-    today = date.today()
-    weeks = completed_weeks(today, HISTORY_WEEKS)
-    this_week = week_start(today)
-    model_weeks = weeks[-MODEL_INPUT_WEEKS:]
-
-    first_day = db.scalar(
-        select(func.min(Expense.expense_date)).where(
-            Expense.department_id == department_id,
-            Expense.status == ExpenseStatus.APPROVED,
-        )
-    )
-    if first_day is None or week_start(first_day) > model_weeks[0]:
-        raise HTTPException(
-            status_code=409,
-            detail="Not enough history: the forecast needs 4 completed weeks of approved spending",
-        )
-    history_start = week_start(first_day)
-
-    rows = db.execute(
-        select(Expense.expense_date, Expense.amount).where(
-            Expense.department_id == department_id,
-            Expense.status == ExpenseStatus.APPROVED,
-            Expense.expense_date >= weeks[0],
-            Expense.expense_date < this_week,
-        )
-    ).all()
-    totals = weekly_totals([(row.expense_date, row.amount) for row in rows], weeks)
-
-    try:
-        predictions = predict(department_id, [float(total) for total in totals[-MODEL_INPUT_WEEKS:]])
+        return build_forecast(db, department_id, predict, date.today())
+    except NotEnoughHistory as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except FileNotFoundError as error:
         raise HTTPException(status_code=503, detail="The forecasting model file is missing on the server.") from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
+
+@router.get("/forecast/all", response_model=AllForecastRead)
+def all_departments_forecast(db: Session = Depends(get_db), _: User = Depends(_finance)):
+    """Predict the next 4 weeks for every department, plus the whole company week by week."""
+    predict = load_predictor()
+    today = date.today()
+    this_week = week_start(today)
     upcoming = [this_week + timedelta(weeks=n) for n in range(FORECAST_WEEKS)]
+    company = [Decimal("0")] * FORECAST_WEEKS
+    departments = []
+    skipped = []
+
+    for department in db.scalars(select(Department).order_by(Department.id)).all():
+        try:
+            result = build_forecast(db, department.id, predict, today)
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=503, detail="The forecasting model file is missing on the server.") from error
+        except (NotEnoughHistory, ValueError) as error:
+            skipped.append({"department_id": department.id, "department_name": department.name, "reason": str(error)})
+            continue
+        weeks = result["weeks"]
+        for n, week in enumerate(weeks):
+            company[n] += week["predicted"]
+        departments.append(
+            {
+                "department_id": department.id,
+                "department_name": department.name,
+                "weeks": weeks,
+                "total_predicted": sum((week["predicted"] for week in weeks), Decimal("0")),
+            }
+        )
+
+    departments.sort(key=lambda row: row["total_predicted"], reverse=True)
     return {
-        "department_id": department_id,
         "model": MODEL_NAME,
         "generated_for_week": this_week,
-        "history": [
-            {"week_start": start, "actual": total if start >= history_start else None}
-            for start, total in zip(weeks, totals)
-        ],
-        "weeks": [
-            {"week_start": start, "predicted": Decimal(str(value))}
-            for start, value in zip(upcoming, predictions)
-        ],
-        "baseline_last_week": totals[-1],
+        "departments": departments,
+        "company_weeks": [{"week_start": start, "predicted": total} for start, total in zip(upcoming, company)],
+        "skipped": skipped,
     }
