@@ -1,0 +1,51 @@
+expense_id,requester_id,requester_name,department_id,department,category,amount_sar,expense_date,description,status,created_at
+346990,2259,Yazeed Al-Muqrin,1,Operations,IT & Telecom,251.25,2026-06-25,Computer accessories,Pending,2026-06-25 16:02:00
+345868,5507,Hassan Al-Otaibi,11,Administration,Transportation,31461.49,2026-06-23,Parking and tolls,Pending,2026-06-23 11:13:00
+345027,5535,Mohammed Al-Mansour,7,Engineering,Travel,93.75,2026-06-22,Conference travel,Pending,2026-06-22 12:26:00
+344261,1752,Nasser Al-Mutairi,1,Operations,Equipment & Maintenance,2253.0,2026-06-22,Cleaning supplies,Pending,2026-06-22 08:01:00
+343191,3767,Abdulaziz Al-Madkhali,6,Projects,Food,213.22,2026-06-19,Team lunch,Pending,2026-06-19 09:39:00
+342223,1194,Abdulaziz Al-Juhani,1,Operations,Transportation,3619.2,2026-06-18,Parking and tolls,Pending,2026-06-18 13:04:00
+341527,2913,Abdullah Al-Zahrani,1,Operations,Office Supplies,266.1,2026-06-17,Office supplies restock,Pending,2026-06-17 12:29:00
+341180,5404,Wafa Al-Thubaiti,8,Field Services,Food,1341.75,2026-06-16,Catering for event,Pending,2026-06-16 16:21:00
+339671,3823,Sultan Al-Rashidi,6,Projects,Office Supplies,433.65,2026-06-15,Printer paper and toner,Pending,2026-06-15 10:50:00
+338993,4675,Hessa Al-Dosari,2,Business Development,Office Supplies,59.96,2026-06-14,Printing services,Pending,2026-06-14 11:27:00
+337587,3987,Nouf Al-Muqrin,13,Health & Safety,IT & Telecom,614.06,2026-06-11,Network services,Pending,2026-06-11 15:26:00
+336111,5431,Razan Al-Khaldi,8,Field Services,Equipment & Maintenance,17827.5,2026-06-09,Maintenance supplies,Pending,2026-06-09 09:31:00
+334159,5571,Amal Al-Asmari,7,Engineering,Equipment & Maintenance,1106.25,2026-06-07,Tools and hardware,Pending,2026-06-07 09:02:00
+333098,5485,Talal Al-Najjar,11,Administration,Travel,353.32,2026-06-04,Travel for client meeting,Pending,2026-06-04 08:37:00
+332582,3037,Nora Al-Qahtani,4,Facilities Management,Equipment & Maintenance,180.08,2026-06-04,Cleaning supplies,Pending,2026-06-04 10:08:00
+332394,1754,Wafa Al-Tamimi,1,Operations,Food,387.56,2026-06-04,Team lunch,Approved,2026-06-04 14:48:00
+332044,4964,Hamad Al-Sulami,3,Research & Development,IT & Telecom,1478.25,2026-06-03,Mobile and internet bill,Approved,2026-06-03 12:51:00
+331335,5572,Saud Al-Rashidi,7,Engineering,Equipment & Maintenance,67.5,2026-06-02,Electrical parts,Approved,2026-06-02 14:45:00
+330763,3527,Talal Al-Tamimi,18,Information Technology,IT & Telecom,23770.76,2026-06-02,Software license,Approved,2026-06-02 13:59:00
+330605,2729,Mazen Al-Amri,1,Operations,Food,494.74,2026-06-02,Catering for event,Approved,2026-06-02 10:41:00
+330271,5398,Omar Al-Mutairi,8,Field Services,Office Supplies,88.12,2026-06-01,Office stationery,Approved,2026-06-01 13:16:00
+330111,4800,Fahad Al-Mutairi,2,Business Development,Equipment & Maintenance,234.64,2026-06-01,Maintenance supplies,Approved,2026-06-01 13:43:00
+328690,4388,Nouf Al-Qahtani,2,Business Development,Transportation,18.75,2026-05-30,Vehicle maintenance,Approved,2026-05-30 10:00:00
+328395,2631,Nora Al-Mansour,1,Operations,Travel,3716.92,2026-05-29,Conference travel,Approved,2026-05-29 08:56:00
+328358,1752,Nasser Al-Mutairi,1,Operations,Equipment & Maintenance,3251.21,2026-05-29,Electrical parts,Approved,2026-05-29 09:58:00
+328317,5571,Amal Al-Asmari,7,Engineering,Office Supplies,6453.75,2026-05-28,Books and reference materials,Approved,2026-05-28 08:54:00
+325385,4726,Dana Al-Yami,2,Business Development,Equipment & Maintenance,660.64,2026-05-25,Tools and hardware,Approved,2026-05-25 08:46:00
+324847,3844,Badr Al-Ahmadi,6,Projects,Equipment & Maintenance,135.23,2026-05-24,Cleaning supplies,Approved,2026-05-24 13:59:00
+324176,4851,Nouf Al-Zahrani,2,Business Development,Travel,75.0,2026-05-21,Hotel stay for business trip,Approved,2026-05-21 14:21:00
+321822,1719,Yousef Al-Khathami,1,Operations,Transportation,348.45,2026-05-19,Fuel for company vehicle,Approved,2026-05-19 12:13:00
+319870,5426,Alanoud Al-Jaber,8,Field Services,Office Supplies,461.21,2026-05-15,Office stationery,Approved,2026-05-15 15:51:00
+319791,4100,Ali Al-Mansour,17,Sales,Food,625.31,2026-05-15,Refreshments for meeting,Approved,2026-05-15 16:04:00
+319393,4750,Lujain Al-Omari,2,Business Development,IT & Telecom,269.96,2026-05-14,Network services,Approved,2026-05-14 10:20:00
+317662,5509,Omar Al-Thubaiti,11,Administration,IT & Telecom,329.85,2026-05-12,Network services,Approved,2026-05-12 12:25:00
+317301,4097,Turki Al-Jaber,17,Sales,Transportation,88.54,2026-05-12,Vehicle spare parts,Approved,2026-05-12 08:48:00
+315423,3521,Mazen Al-Zahrani,18,Information Technology,Transportation,225.41,2026-05-10,Car rental for site visit,Approved,2026-05-10 08:20:00
+315274,2389,Jawaher Al-Zahrani,1,Operations,IT & Telecom,899.78,2026-05-10,Mobile and internet bill,Approved,2026-05-10 13:04:00
+314938,4651,Faisal Al-Sulami,2,Business Development,IT & Telecom,393.71,2026-05-08,Mobile and internet bill,Approved,2026-05-08 09:45:00
+314391,4110,Yousef Al-Qahtani,2,Business Development,Transportation,3962.62,2026-05-07,Fuel for company vehicle,Approved,2026-05-07 08:43:00
+314142,2377,Bashayer Al-Saadi,1,Operations,Office Supplies,2571.0,2026-05-07,Printing services,Approved,2026-05-07 11:47:00
+313911,5438,Bashayer Al-Shahrani,8,Field Services,Travel,892.5,2026-05-06,Accommodation for site visit,Approved,2026-05-06 11:01:00
+311574,4481,Hind Al-Yami,2,Business Development,Travel,8675.25,2026-05-04,Hotel stay for business trip,Approved,2026-05-04 16:59:00
+311572,4481,Hind Al-Yami,2,Business Development,Travel,6348.75,2026-05-04,Conference travel,Approved,2026-05-04 10:51:00
+311344,3835,Hamad Al-Dosari,6,Projects,Transportation,397.5,2026-05-04,Fuel for company vehicle,Approved,2026-05-04 11:16:00
+310993,1880,Lama Al-Dosari,1,Operations,Food,350.06,2026-05-04,Refreshments for meeting,Approved,2026-05-04 08:46:00
+310305,2592,Abdulrahman Al-Sahli,1,Operations,Food,44.62,2026-05-03,Office pantry supplies,Rejected,2026-05-03 16:43:00
+310243,2089,Hessa Al-Khaldi,1,Operations,Food,72.11,2026-05-03,Catering for event,Rejected,2026-05-03 14:11:00
+310020,5469,Jawaher Al-Najjar,8,Field Services,Office Supplies,228.0,2026-05-01,Books and reference materials,Rejected,2026-05-01 10:32:00
+309651,5153,Razan Al-Mansour,3,Research & Development,Office Supplies,421.42,2026-04-30,Printer paper and toner,Rejected,2026-04-30 13:27:00
+309196,3647,Anas Al-Omari,20,Public Relations,Travel,75.0,2026-04-30,Hotel stay for business trip,Rejected,2026-04-30 11:14:00
