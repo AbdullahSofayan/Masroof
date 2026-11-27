@@ -14,7 +14,7 @@ python-dotenv
 # Authentication and password hashing
 python-jose[cryptography]
 pwdlib[argon2]
-passlib[bcrypt]
+bcrypt
 
 # Data validation
 pydantic[email]

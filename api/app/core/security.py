@@ -1,23 +1,20 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-
+import bcrypt
 from app.core.config import settings
-
-_password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from jose import JWTError, jwt
 
 
 def hash_password(password: str) -> str:
-    return _password_context.hash(password)
+    return bcrypt.hashpw(password.encode()[:72], bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return _password_context.verify(password, password_hash)
+    return bcrypt.checkpw(password.encode()[:72], password_hash.encode())
 
 
 def create_access_token(subject: str) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(
+    expires = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     return jwt.encode(
