@@ -23,9 +23,8 @@ import {
   DEMO_PASSWORD,
 } from "./mockData";
 
-export const USE_MOCK = true;
-export const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+export const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
+export const API_URL = import.meta.env.VITE_API_URL || "/api";
 export class ApiError extends Error {
   constructor(message, status = 400) {
     super(message);

@@ -26,6 +26,7 @@ import { recordName } from "../utils/expenseFields";
 import { formatDate, initials, userDisplayName } from "../utils/formatters";
 import { getWorkspaceViews, REPORT_ROLES } from "../utils/workspaceRoutes";
 import NotificationBell from "./NotificationBell";
+import ChatWidget from "../features/ai-chat/ChatWidget";
 
 export function Brand({ light = false }) {
   return (
@@ -324,6 +325,7 @@ export default function Navbar() {
           <Outlet />
         </main>
       </div>
+      <ChatWidget />
     </div>
   );
 }

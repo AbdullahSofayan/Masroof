@@ -1,0 +1,80 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_demo_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-masroof}
+      MYSQL_USER: ${MYSQL_USER:-masroof}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-masroof_demo_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${APP_NAME:-Masroof API}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-masroof}:${MYSQL_PASSWORD:-masroof_demo_password}@db:3306/${MYSQL_DATABASE:-masroof}?charset=utf8mb4
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-replace-this-secret-before-deployment}
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_CHAT_MODEL: ${OPENROUTER_CHAT_MODEL:-openai/gpt-4o-mini}
+      OPENROUTER_CHAT_FALLBACK_MODELS: ${OPENROUTER_CHAT_FALLBACK_MODELS:-google/gemini-2.0-flash-001}
+      OPENROUTER_EMBEDDING_MODEL: ${OPENROUTER_EMBEDDING_MODEL:-nvidia/nemotron-3.5-embed-1b:free}
+      AGENT_ENABLED: ${AGENT_ENABLED:-true}
+      AGENT_CHROMA_PATH: app/agent/data/chroma
+      AGENT_SYNC_ENABLED: ${AGENT_SYNC_ENABLED:-true}
+      AGENT_SYNC_INTERVAL_SECONDS: ${AGENT_SYNC_INTERVAL_SECONDS:-300}
+      AGENT_INDEX_MAX_EXPENSES: ${AGENT_INDEX_MAX_EXPENSES:-20000}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - agent_data:/app/app/agent/data
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+        VITE_USE_MOCK: "false"
+        VITE_AI_CHAT_ENABLED: "true"
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+
+  # Optional automatic HTTPS. Set PUBLIC_DOMAIN to a real DNS name pointing here,
+  # then run: PUBLIC_DOMAIN=example.com docker compose --profile https up -d
+  https:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  mysql_data:
+  agent_data:
+  caddy_data:
+  caddy_config:

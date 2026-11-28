@@ -1,4 +1,3 @@
-
 # API and application server
 fastapi[standard]
 uvicorn[standard]
@@ -10,6 +9,7 @@ alembic
 
 # Configuration
 python-dotenv
+pydantic-settings
 
 # Authentication and password hashing
 python-jose[cryptography]
@@ -30,7 +30,11 @@ pandas
 scikit-learn
 joblib
 
-# Testing
-pytest
+# Agent, retrieval and OpenRouter
+langchain>=1.0,<2
+langchain-openrouter
+chromadb
 httpx
 
+# Testing
+pytest

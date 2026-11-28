@@ -6,7 +6,7 @@ import {
 } from "./constants";
 import { getUserPreferences } from "./preferences";
 
-export const REPORT_ROLES = Object.freeze(["manager", "finance", "admin"]);
+export const REPORT_ROLES = Object.freeze(["manager", "finance", "finance_admin", "admin"]);
 
 export function getWorkspaceViews(user) {
   return [
