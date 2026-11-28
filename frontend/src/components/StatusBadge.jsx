@@ -21,10 +21,7 @@ export default function StatusBadge({ status }) {
       className={`status-badge transition-colors duration-250 ${meta?.className || "border-slate-200 bg-slate-50 text-slate-600"}`}
       {...(enabled ? { initial: false, animate: controls } : {})}
     >
-      <span
-        aria-hidden="true"
-        className="size-1.5 rounded-full bg-current opacity-70 transition-colors duration-250"
-      />
+      <span aria-hidden="true" className="status-dot" />
       {enabled ? (
         <AnimatePresence mode="wait" initial={false}>
           <motion.span

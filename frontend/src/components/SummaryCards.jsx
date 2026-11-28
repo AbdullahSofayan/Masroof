@@ -32,20 +32,19 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
         });
   const sum = (items) =>
     items.reduce((total, expense) => total + (Number(expense.amount) || 0), 0);
-  const approved = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.APPROVED,
-  );
-  const pending = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.PENDING,
-  );
-  const rejected = visibleExpenses.filter(
-    (expense) => expense.status === STATUS.REJECTED,
-  );
-  const total = sum(
-    visibleExpenses.filter((expense) => expense.status !== STATUS.REJECTED),
-  );
+  const byStatus = (status) =>
+    visibleExpenses.filter(
+      (expense) => String(expense.status ?? "").toLowerCase() === status,
+    );
+  const approved = byStatus(STATUS.APPROVED);
+  const pending = byStatus(STATUS.PENDING);
+  const rejected = byStatus(STATUS.REJECTED);
   const approvedTotal = sum(approved);
   const pendingTotal = sum(pending);
+  // Headline spend reflects actual spend: approved requests only.
+  const total = approvedTotal;
+  // Allocation bar compares approved vs pending (rejected excluded).
+  const allocationTotal = approvedTotal + pendingTotal;
   const segments = [
     { label: "Approved", amount: approvedTotal, className: "bg-[#DCEACB]" },
     { label: "Pending", amount: pendingTotal, className: "bg-[#9FB699]" },
@@ -73,7 +72,9 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
     >
       <div className="relative z-10 flex h-full flex-col">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-white/80">{title}</h2>
+          <h2 className="text-base leading-snug font-semibold text-white/95">
+            {title}
+          </h2>
           <div
             className="hero-timeframes"
             role="group"
@@ -102,7 +103,7 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
             className="hero-number leading-none"
           />
         </p>
-        <p className="hero-request-count mt-3 text-xs text-white/55">
+        <p className="hero-request-count mt-3 text-xs leading-relaxed text-white/80">
           <span className="tabular-nums">{visibleExpenses.length}</span>{" "}
           {visibleExpenses.length === 1 ? "request" : "requests"} ·{" "}
           {timeframe === "All time"
@@ -121,12 +122,12 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
                 key={segment.label}
                 className={`h-full rounded-full ${segment.className}`}
                 style={{
-                  width: `${total > 0 ? (segment.amount / total) * 100 : 0}%`,
+                  width: `${allocationTotal > 0 ? (segment.amount / allocationTotal) * 100 : 0}%`,
                 }}
               />
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[10px] text-white/70">
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/80">
             {segments.map((segment) => (
               <span
                 key={segment.label}
@@ -138,20 +139,28 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
                 />
                 {segment.label}
                 <span className="tabular-nums text-white">
-                  {total > 0 ? Math.round((segment.amount / total) * 100) : 0}%
+                  {allocationTotal > 0
+                    ? Math.round((segment.amount / allocationTotal) * 100)
+                    : 0}
+                  %
                 </span>
               </span>
             ))}
           </div>
-          <p className="sr-only">Rejected requests are excluded from spend.</p>
+          <p className="sr-only">
+            Spend includes approved requests only; pending and rejected requests
+            are excluded.
+          </p>
         </div>
-        <dl className="hero-metrics mt-auto grid grid-cols-2 gap-x-4 gap-y-5 border-t border-white/15 pt-5 xl:grid-cols-4">
+        <dl className="hero-metrics mt-auto grid gap-x-4 gap-y-4 border-t border-white/20">
           {metrics.map((metric) => (
             <div key={metric.label} className="min-w-0">
-              <dt className="text-[10px] text-white/60">{metric.label}</dt>
-              <dd className="mt-2 text-sm font-medium tabular-nums sm:text-base">
+              <dt className="text-xs font-medium text-white/85">
+                {metric.label}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold tabular-nums sm:text-base">
                 {!metric.percent && (
-                  <span className="mr-1 text-[10px] text-white/55">
+                  <span className="mr-1 text-[11px] text-white/75">
                     {CURRENCY}
                   </span>
                 )}
@@ -164,7 +173,7 @@ export default function SummaryCards({ expenses = [], title = "Total spend" }) {
                   trigger="load"
                 />
               </dd>
-              <dd className="mt-1 text-[10px] text-white/45">
+              <dd className="mt-1 text-[11px] text-white/75">
                 {metric.percent ? (
                   "of all requests"
                 ) : (

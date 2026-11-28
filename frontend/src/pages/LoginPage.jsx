@@ -130,11 +130,13 @@ export default function LoginPage() {
           </p>
           {error && (
             <div className="mt-6">
-              <ErrorBox message={error} />
+              <ErrorBox id="login-error" message={error} />
             </div>
           )}
           <form
             className="mt-6 space-y-5"
+            aria-describedby={error ? "login-error" : undefined}
+            aria-busy={busy}
             onSubmit={(event) => {
               event.preventDefault();
               signIn();
@@ -152,7 +154,10 @@ export default function LoginPage() {
                 autoComplete="username"
                 placeholder="you@company.sa"
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  setError("");
+                }}
                 required
                 disabled={!!busy}
               />
@@ -171,7 +176,10 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setError("");
+                  }}
                   required
                   disabled={!!busy}
                 />
@@ -191,7 +199,14 @@ export default function LoginPage() {
               disabled={!!busy}
             >
               {busy ? (
-                <LoaderCircle size={18} className="animate-spin" />
+                <>
+                  <LoaderCircle
+                    size={18}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                  Signing in…
+                </>
               ) : (
                 <>
                   Sign in

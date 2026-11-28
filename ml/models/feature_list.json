@@ -1,0 +1,70 @@
+{
+  "step": "6 - feature selection",
+  "features": [
+    "log_amount",
+    "amount_vs_employee_category",
+    "category_share_for_employee",
+    "same_category_day_count",
+    "duplicate_count",
+    "is_weekend",
+    "is_round_amount",
+    "other_category_day_count"
+  ],
+  "dropped": {
+    "amount_vs_department": "r = 0.98 with log_amount (departments have a similar normal)",
+    "amount_vs_employee": "r = 0.92 with amount_vs_employee_category; adds only 6 unusual cases",
+    "daily_request_count": "r = 0.97 with same_category_day_count; replaced by other_category_day_count"
+  },
+  "reasons": [
+    {
+      "code": "large_amount",
+      "feature": "log_amount",
+      "only_when": "any"
+    },
+    {
+      "code": "amount_high_for_employee_category",
+      "feature": "amount_vs_employee_category",
+      "only_when": "baseline_level == empcat"
+    },
+    {
+      "code": "amount_high_for_employee",
+      "feature": "amount_vs_employee_category",
+      "only_when": "baseline_level == emp"
+    },
+    {
+      "code": "amount_high_for_department",
+      "feature": "amount_vs_employee_category",
+      "only_when": "baseline_level == deptcat"
+    },
+    {
+      "code": "unusual_category_for_employee",
+      "feature": "category_share_for_employee",
+      "only_when": "baseline_level in (empcat, emp)"
+    },
+    {
+      "code": "possible_split_request",
+      "feature": "same_category_day_count",
+      "only_when": "any"
+    },
+    {
+      "code": "duplicate_request",
+      "feature": "duplicate_count",
+      "only_when": "any"
+    },
+    {
+      "code": "many_requests_same_day",
+      "feature": "other_category_day_count",
+      "only_when": "any"
+    },
+    {
+      "code": "weekend_expense",
+      "feature": "is_weekend",
+      "only_when": "any"
+    },
+    {
+      "code": "round_amount",
+      "feature": "is_round_amount",
+      "only_when": "any"
+    }
+  ]
+}

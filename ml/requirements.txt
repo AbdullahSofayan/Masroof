@@ -1,0 +1,6 @@
+# ML service (what the backend runs)
+fastapi[standard]
+pandas>=3.0,<4
+numpy>=2.0
+scikit-learn==1.9.1   # must match the version the model was trained with (models/model_config.json)
+joblib

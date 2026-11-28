@@ -210,7 +210,7 @@ export default function Navbar() {
           <div className="workspace-switcher relative mb-7">
             <label
               htmlFor={views.length > 1 ? "workspace" : undefined}
-              className="mb-2.5 block px-1 text-[9px] font-medium uppercase tracking-[0.16em] text-zinc-400"
+              className="mb-2.5 block px-1 text-[11px] font-medium text-zinc-600"
             >
               Your workspace
             </label>
@@ -240,9 +240,6 @@ export default function Navbar() {
               <div className="workspace-badge">{views[0]?.[1]}</div>
             )}
           </div>
-          <p className="mb-3 hidden px-3 text-[9px] font-medium uppercase tracking-[0.16em] text-zinc-400 lg:block">
-            Workspace
-          </p>
           <nav aria-label="Main navigation" className="nav-list">
             {links.map(({ to, label, Icon, pending: showPending }) => (
               <NavLink
@@ -254,7 +251,7 @@ export default function Navbar() {
                   `nav-item ${isActive ? "active" : ""}`
                 }
               >
-                <Icon size={17} />
+                <Icon size={17} aria-hidden="true" />
                 {label}
                 {showPending && pending !== null && (
                   <span
@@ -264,9 +261,6 @@ export default function Navbar() {
                   >
                     {pending}
                   </span>
-                )}
-                {to.endsWith("/new") && (
-                  <span className="ml-auto text-lg font-light">+</span>
                 )}
               </NavLink>
             ))}
@@ -294,7 +288,7 @@ export default function Navbar() {
                   {name}
                 </p>
                 <p
-                  className="mt-1 truncate text-[10px] text-zinc-400"
+                  className="mt-1 truncate text-[11px] text-zinc-600"
                   dir="auto"
                 >
                   {recordName(user.department) ||
@@ -320,7 +314,7 @@ export default function Navbar() {
           </div>
         </aside>
         <main id="main-content" className="main-content">
-          <div className="mb-7 flex items-center justify-between gap-3 text-[10px] text-zinc-400">
+          <div className="caption mb-6 flex items-center justify-between gap-3">
             <span>
               Workspace <span className="mx-2">/</span>
               <span className="capitalize text-zinc-600">{area}</span>

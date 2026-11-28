@@ -98,9 +98,7 @@ export default function FinanceDashboard() {
         >
           <section className="card bento-panel h-full">
             <h2 className="bento-title mb-1">Spend by department</h2>
-            <p className="mb-4 text-[11px] text-zinc-500">
-              Approved · All time
-            </p>
+            <p className="caption mb-4">Approved · All time</p>
             <RankedBars rows={departmentRows} />
           </section>
         </AnimatedContent>
@@ -122,7 +120,7 @@ export default function FinanceDashboard() {
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="bento-title">Monthly spend</h2>
-                <p className="mt-1.5 text-[11px] text-zinc-500">
+                <p className="caption mt-1.5">
                   Approved expenses · Last 6 months
                 </p>
               </div>
@@ -138,7 +136,7 @@ export default function FinanceDashboard() {
                 label="Company budget · this month"
               />
             </div>
-            <p className="mt-4 text-[11px] text-zinc-500">
+            <p className="caption mt-4">
               <span className="tabular-nums">{pendingCount}</span> requests (
               <span className="tabular-nums">
                 {formatMoney(dashboard.pending_total)}
@@ -160,7 +158,7 @@ export default function FinanceDashboard() {
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h2 className="bento-title">Budgets this month</h2>
-                <p className="mt-1.5 text-[11px] text-zinc-500">
+                <p className="caption mt-1.5">
                   Approved spend against each department’s monthly budget
                 </p>
               </div>
@@ -203,9 +201,7 @@ export default function FinanceDashboard() {
         >
           <section className="card bento-panel h-full">
             <h2 className="bento-title mb-1">Spend by category</h2>
-            <p className="mb-4 text-[11px] text-zinc-500">
-              Approved · This month
-            </p>
+            <p className="caption mb-4">Approved · This month</p>
             <RankedBars
               rows={categoryRows}
               emptyText="No approved spend this month yet."
@@ -220,9 +216,7 @@ export default function FinanceDashboard() {
         >
           <section className="card bento-panel flex h-full flex-col">
             <h2 className="bento-title mb-1">Top spenders</h2>
-            <p className="mb-4 text-[11px] text-zinc-500">
-              Approved · All time
-            </p>
+            <p className="caption mb-4">Approved · All time</p>
             <RankedBars rows={employeeRows} />
             <Link
               to="/finance/forecast"

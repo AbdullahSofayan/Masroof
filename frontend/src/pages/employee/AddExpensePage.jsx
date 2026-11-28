@@ -26,6 +26,16 @@ import {
 import { today } from "../../utils/formatters";
 import { useAsync } from "../../utils/useAsync";
 
+function FieldError({ id, message }) {
+  return (
+    message && (
+      <p id={id} className="field-error" role="alert">
+        {message}
+      </p>
+    )
+  );
+}
+
 export default function AddExpensePage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -46,6 +56,7 @@ export default function AddExpensePage() {
   });
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [savedId, setSavedId] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -69,6 +80,7 @@ export default function AddExpensePage() {
     );
     setFile(null);
     setError("");
+    setFieldError(null);
     setSavedId(null);
   }, [initial.data]);
   if (initial.loading) return <Spinner />;
@@ -86,20 +98,33 @@ export default function AddExpensePage() {
         <ErrorBox message="This request cannot be edited. Only your pending expenses can be changed." />
       </>
     );
-  const setField = (event) =>
-    setForm((previous) => ({
-      ...previous,
-      [event.target.name]: event.target.value,
-    }));
+  const setField = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({ ...previous, [name]: value }));
+    if (fieldError?.field === name) setFieldError(null);
+  };
+  const amountError = fieldError?.field === "amount" ? fieldError.message : "";
+  const descriptionError =
+    fieldError?.field === "description" ? fieldError.message : "";
+  const receiptError =
+    fieldError?.field === "receipt" ? fieldError.message : "";
+
+  function showFieldError(field, message) {
+    setFieldError({ field, message });
+    document.getElementById(field)?.focus();
+  }
+
   function chooseReceipt(chosen) {
     if (busy) return;
+    if (receiptError) setFieldError(null);
     if (!chosen) {
       setFile(null);
       return;
     }
+    setError("");
     const validation = validateReceipt(chosen);
-    setError(validation);
     if (validation) {
+      showFieldError("receipt", validation);
       setFile(null);
       if (document.getElementById("receipt"))
         document.getElementById("receipt").value = "";
@@ -113,7 +138,7 @@ export default function AddExpensePage() {
     setDragging(false);
     if (busy) return;
     if (event.dataTransfer.files.length !== 1) {
-      setError("Choose one receipt file at a time.");
+      showFieldError("receipt", "Choose one receipt file at a time.");
       return;
     }
     chooseReceipt(event.dataTransfer.files[0]);
@@ -121,16 +146,25 @@ export default function AddExpensePage() {
   async function save(event) {
     event.preventDefault();
     setError("");
-    if ((file || !expense?.attachment_url) && validateReceipt(file)) {
-      setError(validateReceipt(file));
-      return;
-    }
+    setFieldError(null);
     if (!form.description.trim()) {
-      setError("Add a description of the business purpose.");
+      showFieldError(
+        "description",
+        "Add a description of the business purpose.",
+      );
       return;
     }
     if (!/^\d+(\.\d{1,2})?$/.test(form.amount) || Number(form.amount) <= 0) {
-      setError("Enter a positive amount with up to two decimal places.");
+      showFieldError(
+        "amount",
+        "Enter a positive amount with up to two decimal places.",
+      );
+      return;
+    }
+    const receiptValidation =
+      file || !expense?.attachment_url ? validateReceipt(file) : "";
+    if (receiptValidation) {
+      showFieldError("receipt", receiptValidation);
       return;
     }
     setBusy(true);
@@ -166,9 +200,7 @@ export default function AddExpensePage() {
     <>
       <BackLink to="/employee/expenses">Back to my expenses</BackLink>
       <PageHeading
-        eyebrow={
-          id ? `Expense #${id}` : "A receipt today. A clear record tomorrow."
-        }
+        eyebrow={id ? `Expense #${id}` : undefined}
         title={id ? "Update your expense" : "Submit a new expense"}
         description={
           id
@@ -183,23 +215,25 @@ export default function AddExpensePage() {
           className="mb-6"
         />
       )}
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <form className="card p-5 sm:p-7" onSubmit={save}>
+      <div className="workspace-grid items-start xl:grid-cols-[minmax(0,1fr)_300px]">
+        <form
+          className="card bento-panel"
+          onSubmit={save}
+          aria-describedby={error ? "expense-submit-error" : undefined}
+        >
           <fieldset disabled={busy} className="min-w-0 space-y-6">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-5">
               <span className="expense-icon">
                 <FileText size={20} />
               </span>
               <div>
-                <h2 className="font-semibold">Expense details</h2>
-                <p className="mt-1 text-xs text-slate-400">
-                  All fields are required.
-                </p>
+                <h2 className="bento-title">Expense details</h2>
+                <p className="caption mt-1">All fields are required.</p>
               </div>
             </div>
-            <ErrorBox message={error} />
+            <ErrorBox id="expense-submit-error" message={error} />
             <div className="grid gap-5 sm:grid-cols-2">
-              <div>
+              <div className="min-w-0">
                 <label htmlFor="amount" className="field-label">
                   Amount ({CURRENCY})
                 </label>
@@ -213,17 +247,23 @@ export default function AddExpensePage() {
                     min="0.01"
                     step="0.01"
                     inputMode="decimal"
+                    aria-invalid={amountError ? true : undefined}
+                    aria-describedby={amountError ? "amount-error" : undefined}
                     placeholder="0.00"
                     value={form.amount}
                     onChange={setField}
                     required
                   />
-                  <span className="absolute right-3 top-3 text-sm text-slate-400">
+                  <span
+                    className="caption pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+                    aria-hidden="true"
+                  >
                     {CURRENCY}
                   </span>
                 </div>
+                <FieldError id="amount-error" message={amountError} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label htmlFor="expense_date" className="field-label">
                   Expense date
                 </label>
@@ -270,15 +310,22 @@ export default function AddExpensePage() {
               <textarea
                 id="description"
                 name="description"
-                className="input min-h-32 resize-y leading-7"
+                className="input min-h-28 resize-y leading-relaxed"
                 dir="auto"
+                aria-invalid={descriptionError ? true : undefined}
+                aria-describedby={
+                  descriptionError
+                    ? "description-error description-count"
+                    : "description-count"
+                }
                 placeholder="What was this expense for? Add a little context for your manager."
                 maxLength={DESCRIPTION_MAX_LENGTH}
                 value={form.description}
                 onChange={setField}
                 required
               />
-              <p className="mt-2 text-right text-xs tabular-nums text-slate-400">
+              <FieldError id="description-error" message={descriptionError} />
+              <p id="description-count" className="caption mt-2 text-right">
                 {form.description.length} / {DESCRIPTION_MAX_LENGTH}
               </p>
             </div>
@@ -304,18 +351,23 @@ export default function AddExpensePage() {
                 <p className="text-sm font-medium text-slate-700">
                   Choose a clear copy of your receipt
                 </p>
-                <p id="receipt-help" className="mt-2 text-xs text-slate-400">
+                <p id="receipt-help" className="caption mt-2">
                   One JPG, PNG, or PDF · Up to {FILE_SIZE_LABEL}
                 </p>
                 <input
                   id="receipt"
                   type="file"
                   accept={FILE_ACCEPT}
-                  aria-describedby="receipt-help"
+                  aria-invalid={receiptError ? true : undefined}
+                  aria-required={!expense?.attachment_url}
+                  aria-describedby={
+                    receiptError ? "receipt-help receipt-error" : "receipt-help"
+                  }
                   className="mt-4 w-full max-w-xs text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:font-semibold file:text-emerald-700 hover:file:bg-emerald-100"
                   onChange={(event) => chooseReceipt(event.target.files[0])}
                 />
               </div>
+              <FieldError id="receipt-error" message={receiptError} />
               {file && (
                 <div className="mt-3">
                   <ReceiptScanPreview key={receiptGeneration} file={file} />
