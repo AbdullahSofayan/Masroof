@@ -2,13 +2,8 @@ from decimal import Decimal
 
 from app.services.decision_engine import evaluate_expense
 
-# prepare expense data with financial warnings and AI results
-
-
-# Later:
-# -Get employee information from authentication.
-# -Fetch category limits and monthly budget data from mysql
-# -Save the prepared expense using SQLAlchemy.
+# prepare a pending expense with its warnings and any AI result
+# the caller provides employee and finance data and handles saving
 def prepare_expense(
     expense_data: dict,
     employee: dict,
@@ -18,7 +13,7 @@ def prepare_expense(
     anomaly_result: dict | None = None,
 ) -> dict:
 
-    # evaluate the expense using finance rules and AI results
+    # collect the finance warnings and any AI result
     evaluation = evaluate_expense(
         amount=expense_data["amount"],
         category_limit=category_limit,
@@ -27,7 +22,7 @@ def prepare_expense(
         anomaly_result=anomaly_result,
     )
 
-    # prepare the expense with pending status
+    # new expenses start as pending
     expense = {
         "requester_id": employee["id"],
         "department_id": employee["department_id"],
@@ -35,7 +30,7 @@ def prepare_expense(
         "amount": expense_data["amount"],
         "description": expense_data["description"],
         "expense_date": expense_data["expense_date"],
-        "status": "Pending",
+        "status": "pending",
         "warnings": evaluation["warnings"],
         "risk_level": evaluation["risk_level"],
         "anomaly_score": evaluation["anomaly_score"],
