@@ -287,6 +287,46 @@ def update_expense(
 
 
 
+##=-=-=-=-=-=- Delete pending expenses =-=-=-=-=-=-
+
+##let the employee delete their own pending expense
+@expense_router.delete("/{expense_id}", status_code=204)
+def delete_expense(
+    expense_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != UserRole.EMPLOYEE:
+        raise HTTPException(status_code=403, detail="Only employees can delete expenses.")
+
+
+    ##lock the request so the manager cannot review it during deletion
+    query = visible_expenses_query(current_user).where(Expense.id == expense_id)
+    expense = db.scalar(query.with_for_update())
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found.")
+    if expense.status != ExpenseStatus.PENDING:
+        raise HTTPException(status_code=409, detail="Only Pending expenses can be deleted.")
+
+    filename = expense.receipt_path
+    db.delete(expense)
+    db.commit()
+
+
+    ##remove the receipt after MySQL saves the deletion
+    if filename:
+        try:
+            receipt_file(filename).unlink(missing_ok=True)
+        except (HTTPException, OSError):
+            logger.warning("Could not remove the receipt for deleted expense %s", expense_id)
+
+    return Response(status_code=204)
+
+
+
+
+
+
 ##=-=-=-=-=-=- Approve and reject expenses =-=-=-=-=-=-
 
 ##save the manager's decision, note, and review time for a pending request
